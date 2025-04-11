@@ -16,3 +16,5 @@ services:
 
   - name: IHaveNoOtherIdeas
     port: 5004
+
+vm_ip: 10.60.1.1

@@ -12,9 +12,13 @@ def load_config():
 
 config = load_config()
 
+@app.route("/api/vm_ip")
+def get_vm_ip():
+    return jsonify(config.get("vm_ip", "No VM IP configured"))
+
 @app.route("/api/services")
 def get_services():
-    return jsonify(config.get("services", []))
+    return jsonify(config.get("services", "No services configured"))
 
 if __name__ == "__main__":
     app.run(debug=True, port=7001)
