@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  backend:
+    build: ./backend
+    container_name: flask-backend
+    ports:
+      - "7001:7001"
+
+  frontend:
+    build: ./frontend
+    container_name: react-frontend
+    ports:
+      - "7000:7000"
+    depends_on:
+      - backend
