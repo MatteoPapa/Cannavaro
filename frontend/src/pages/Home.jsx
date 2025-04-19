@@ -7,15 +7,42 @@ import {
   CardContent,
   Typography,
   Chip,
+  Button,
 } from "@mui/material";
 import { Memory } from "@mui/icons-material";
 import ComputerIcon from "@mui/icons-material/Computer";
+import DownloadIcon from "@mui/icons-material/Download";
 
 function Home() {
   const [services, setServices] = useState([]);
   const [vmIp, setVmIp] = useState("");
 
+  const handleGetZip = () => {
+    fetch("/api/get_zip")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to get ZIP");
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        // Create a download link for the zip file
+        const url = window.URL.createObjectURL(new Blob([blob]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", "home_backup.zip"); // Name the downloaded file
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      })
+      .catch((error) => {
+        console.error("Download error:", error);
+        alert("Error downloading the zip file.");
+      });
+  };
+
   useEffect(() => {
+    console.log("Fetching services and VM IP...");
     fetch("/api/services")
       .then((res) => res.json())
       .then(setServices);
@@ -23,7 +50,6 @@ function Home() {
     fetch("/api/vm_ip")
       .then((res) => res.json())
       .then((data) => {
-        console.log(data);
         setVmIp(data);
       });
   }, []);
@@ -68,6 +94,28 @@ function Home() {
           borderRadius: 2,
         }}
       >
+        <Box display={"flex"} justifyContent="center" mb={2} gap={2}>
+          <Button
+            variant="contained"
+            color="primary"
+            sx={{ mb: 2 }}
+            onClick={handleGetZip}
+          >
+            <DownloadIcon sx={{ mr: 1 }} />
+            Original Zip
+          </Button>
+
+          <Button
+            variant="contained"
+            color="secondary"
+            sx={{ mb: 2 }}
+            onClick={handleGetZip}
+          >
+            <DownloadIcon sx={{ mr: 1 }} />
+            Current Zip
+          </Button>
+        </Box>
+
         <Box
           display={"flex"}
           alignItems="center"

@@ -17,3 +17,5 @@ services:
       - "7000:7000"
     depends_on:
       - backend
+    environment:
+      - VITE_API_PROXY=http://backend:7001

@@ -42,15 +42,12 @@ def get_zip():
         # Remove previous zip file to avoid recursive inclusion
         ssh.exec_command(f'rm -f {remote_zip_path}')
 
-        # Create ZIP of all contents inside /root, excluding the zip file itself
         zip_cmd = f'cd {remote_dir_to_zip} && zip -r home_backup.zip *'
         stdin, stdout, stderr = ssh.exec_command(zip_cmd)
         stdout.channel.recv_exit_status()  # Wait for command to finish
 
-        # Ensure local folder exists
         os.makedirs(local_zip_dir, exist_ok=True)
 
-        # Download the ZIP using SFTP
         sftp = ssh.open_sftp()
 
         try:
@@ -68,4 +65,4 @@ def get_zip():
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=7001)
+    app.run(host='0.0.0.0', port=7001,debug=False)
