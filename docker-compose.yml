@@ -6,6 +6,9 @@ services:
     container_name: flask-backend
     ports:
       - "7001:7001"
+    volumes:
+      - ~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro 
+      - ./backend:/app  #DEVELOPMENT
 
   frontend:
     build: ./frontend

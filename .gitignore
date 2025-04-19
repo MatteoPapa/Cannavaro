@@ -1,3 +1,5 @@
 node_modules/
 __pycache__/
 .env
+zip
+test_vm

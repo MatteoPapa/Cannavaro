@@ -14,7 +14,9 @@ services:
   - name: CalabriaRevenge
     port: 5003
 
-  # - name: IHaveNoOtherIdeas
-  #   port: 5004
+  - name: IHaveNoOtherIdeas
+    port: 5004
 
-vm_ip: 10.60.1.1
+vm_ip: host.docker.internal
+vm_password: rootpassword
+ssh_port: 2222
