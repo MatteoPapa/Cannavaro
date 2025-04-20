@@ -1,10 +1,3 @@
-services_example:
-  - name: Notes
-    port: 5001
-
-  - name: PCSS
-    port: 5002
-
 vm_ip: host.docker.internal
 #vm_ip: 127.0.0.1
 vm_password: rootpassword
