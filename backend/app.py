@@ -1,8 +1,9 @@
 from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 import os
-from core.initializer import initialize_vm_and_services
-from utils.zip_utils import setup_zip_dirs, create_and_download_zip, create_timestamped_filename
+from core.initializer import *
+from utils.zip_utils import *
+from utils.db_utils import *
 
 # ─── Paths & Constants ─────────────────────
 BASE_DIR = os.path.dirname(__file__)
@@ -17,6 +18,9 @@ CORS(app)
 
 # ─── Init VM & Services ────────────────────
 config, ssh = initialize_vm_and_services(CONFIG_PATH, SERVICES_YAML_PATH, ZIP_BASE_DIR)
+
+# ─── Init Database ────────────────────────────
+mongo_client, db = connect_to_mongo()
 
 # ─── API Routes ────────────────────────────
 @app.route("/api/vm_ip")

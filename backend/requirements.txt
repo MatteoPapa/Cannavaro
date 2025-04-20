@@ -2,3 +2,5 @@ Flask
 PyYAML
 Flask-Cors
 paramiko
+pymongo
+dnspython
