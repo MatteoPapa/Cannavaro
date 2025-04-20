@@ -1,21 +1,9 @@
-services:
+services_example:
   - name: Notes
     port: 5001
 
   - name: PCSS
     port: 5002
-
-  - name: Pwnzerotti
-    port: 5003
-
-  - name: SapienzaWins
-    port: 5004
-
-  - name: CalabriaRevenge
-    port: 5003
-
-  - name: IHaveNoOtherIdeas
-    port: 5004
 
 vm_ip: host.docker.internal
 #vm_ip: 127.0.0.1

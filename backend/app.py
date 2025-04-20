@@ -2,9 +2,9 @@ from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 import yaml
 import os
-import datetime
 
-from utils import *
+from utils.ssh_utils import *
+from utils.zip_utils import setup_zip_dirs, create_and_download_zip, create_timestamped_filename
 
 app = Flask(__name__)
 CORS(app)
@@ -18,40 +18,40 @@ config = load_config()
 ssh = setup_ssh_authorized_key(config)
 
 ZIP_BASE_DIR = os.path.join(os.path.dirname(__file__), 'zip')
-STARTUP_ZIP_PATH = os.path.join(ZIP_BASE_DIR, 'home_backup_startup.zip')
-CURRENT_ZIP_DIR = os.path.join(ZIP_BASE_DIR, 'current_zips')
+STARTUP_ZIP_PATH, CURRENT_ZIP_DIR = setup_zip_dirs(ZIP_BASE_DIR)
 
-os.makedirs(ZIP_BASE_DIR, exist_ok=True)
-os.makedirs(CURRENT_ZIP_DIR, exist_ok=True)
+SERVICES_YAML_PATH = os.path.join(os.path.dirname(__file__), 'services.yaml')
 
-def create_and_download_zip(filename="home_backup.zip"):
-    remote_dir_to_zip = "/root"
-    remote_zip_path = f"/root/{filename}"
-    
-    # Avoid recursive inclusion
-    ssh.exec_command(f'rm -f {remote_zip_path}')
-    zip_cmd = f'cd {remote_dir_to_zip} && zip -r {filename} *'
-    stdin, stdout, stderr = ssh.exec_command(zip_cmd)
-    stdout.channel.recv_exit_status()
-
-    sftp = ssh.open_sftp()
-    try:
-        sftp.stat(remote_zip_path)
-    except FileNotFoundError:
-        sftp.close()
-        return None
-
-    local_zip_path = os.path.join(ZIP_BASE_DIR, filename)
-    sftp.get(remote_zip_path, local_zip_path)
-    sftp.close()
-
-    return local_zip_path
-
-# Create the startup zip at launch
 if ssh:
     print("✅ SSH connection established.")
     ensure_remote_dependencies(ssh)
-    startup_zip = create_and_download_zip("home_backup_startup.zip")
+
+    # Discover & persist services
+    discovered_services = list_vm_services_with_ports(ssh)
+    print(f"🔍 Discovered services: {discovered_services}")
+    save_services_to_yaml(discovered_services, SERVICES_YAML_PATH)
+
+    # Get folder names from /root to validate coverage
+    stdin, stdout, stderr = ssh.exec_command("ls -d /root/*/")
+    all_folders = [os.path.basename(path.strip("/")) for path in stdout.read().decode().splitlines()]
+
+    discovered_folders = {s["name"] for s in discovered_services}
+    missing_services = [f for f in all_folders if f not in discovered_folders]
+
+    if missing_services:
+        print(f"⚠️ Missing service ports for: {missing_services}")
+        print(f"⏸️  Please update {SERVICES_YAML_PATH} manually with missing entries.")
+        input("🔁 Press Enter when done to continue...")
+
+        # Reload manually updated services.yaml
+        with open(SERVICES_YAML_PATH, "r") as f:
+            updated_services = yaml.safe_load(f).get("services", [])
+            config["services"] = updated_services
+    else:
+        config["services"] = discovered_services
+
+    # Create startup zip
+    startup_zip = create_and_download_zip(ssh, ZIP_BASE_DIR, "home_backup_startup.zip")
     if startup_zip:
         print(f"📦 Startup backup saved: {startup_zip}")
     else:
@@ -77,16 +77,14 @@ def get_current_zip():
         return jsonify({"error": "SSH not connected"}), 500
 
     try:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"home_backup_{timestamp}.zip"
-        zip_path = create_and_download_zip(filename)
+        filename = create_timestamped_filename()
+        temp_zip_path = create_and_download_zip(ssh, ZIP_BASE_DIR, filename)
 
-        if not zip_path:
+        if not temp_zip_path:
             return jsonify({"error": "Failed to create ZIP"}), 500
 
-        # Move the zip to a dedicated current zip directory
         stored_path = os.path.join(CURRENT_ZIP_DIR, filename)
-        os.rename(zip_path, stored_path)
+        os.rename(temp_zip_path, stored_path)
 
         return send_file(stored_path, as_attachment=True)
 
