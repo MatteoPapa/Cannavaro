@@ -1,7 +1,7 @@
 services:
-- name: Notes
+- name: Chall1
   port: 8000
-- name: PCSS
-  port: 3000
-- name: Pwnzer0tt1Shop
-  port: 80
+- name: Chall2
+  port: 8001
+- name: Chall3
+  port: 8004

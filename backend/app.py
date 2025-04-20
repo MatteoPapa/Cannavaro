@@ -35,8 +35,8 @@ if ssh:
     stdin, stdout, stderr = ssh.exec_command("ls -d /root/*/")
     all_folders = [os.path.basename(path.strip("/")) for path in stdout.read().decode().splitlines()]
 
-    discovered_folders = {s["name"] for s in discovered_services}
-    missing_services = [f for f in all_folders if f not in discovered_folders]
+    missing_services = [s["name"] for s in discovered_services if "port" not in s]
+
 
     if missing_services:
         print(f"⚠️ Missing service ports for: {missing_services}")
@@ -49,6 +49,7 @@ if ssh:
             config["services"] = updated_services
     else:
         config["services"] = discovered_services
+
 
     # Create startup zip
     startup_zip = create_and_download_zip(ssh, ZIP_BASE_DIR, "home_backup_startup.zip")

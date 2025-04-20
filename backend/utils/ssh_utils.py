@@ -89,33 +89,47 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
                 break
 
         if not compose_content:
+            print(f"⚠️ No compose file found in {folder_name}")
+            services.append({"name": folder_name})
             continue
 
         try:
             compose_data = yaml.safe_load(io.StringIO(compose_content))
             services_in_compose = compose_data.get("services", {})
 
+            extracted_ports = []
             for service_config in services_in_compose.values():
                 ports = service_config.get("ports", [])
                 for port_mapping in ports:
-                    # Normalize to string
                     port_str = str(port_mapping).strip()
-
-                    # Match patterns like "8000:80", "0.0.0.0:3000:3000", etc.
                     match = re.match(r"(?:[\d\.]+:)?(\d+):\d+", port_str)
                     if match:
-                        host_port = int(match.group(1))
-                        services.append({
-                            "name": folder_name,
-                            "port": host_port
-                        })
+                        extracted_ports.append(int(match.group(1)))
+
+            if extracted_ports:
+                for port in extracted_ports:
+                    services.append({
+                        "name": folder_name,
+                        "port": port
+                    })
+            else:
+                services.append({"name": folder_name})  # No ports found, just name
 
         except Exception as e:
             print(f"⚠️ Failed to parse compose file in {folder_name}: {e}")
+            services.append({"name": folder_name})
             continue
 
     return services
 
 def save_services_to_yaml(services, path):
+    # Ensure each service has both keys, even if port is None
+    formatted_services = []
+    for svc in services:
+        formatted_services.append({
+            "name": svc.get("name"),
+            "port": svc.get("port") if "port" in svc else None
+        })
+
     with open(path, 'w') as file:
-        yaml.dump({"services": services}, file)
+        yaml.dump({"services": formatted_services}, file, sort_keys=False)
