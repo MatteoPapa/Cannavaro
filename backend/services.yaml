@@ -1,8 +1,8 @@
 # 🔧 Add missing port numbers below before continuing
 services:
 - name: Chall1
-  port: 8001
+  port: 800
 - name: Chall2
-  port: 8002
+  port: 234
 - name: Chall3
-  port: 8004
+  port: 125

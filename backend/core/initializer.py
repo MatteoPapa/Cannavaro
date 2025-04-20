@@ -16,10 +16,38 @@ def load_config(path):
     with open(path, 'r') as file:
         return yaml.safe_load(file)
 
+def is_fully_initialized(services_path, startup_zip_path):
+    if not os.path.exists(services_path):
+        return False
+
+    with open(services_path, 'r') as f:
+        try:
+            data = yaml.safe_load(f)
+            services = data.get("services", [])
+            if not services:
+                return False
+
+            for svc in services:
+                if "name" not in svc or "port" not in svc or svc["port"] is None:
+                    return False
+        except Exception:
+            return False
+
+    return os.path.exists(startup_zip_path)
+
 def initialize_vm_and_services(config_path, services_yaml_path, zip_base_dir):
     config = load_config(config_path)
-    ssh = setup_ssh_authorized_key(config)
+    startup_zip_path = os.path.join(zip_base_dir, "home_backup_startup.zip")
 
+    # Skip SSH if everything is already done
+    if is_fully_initialized(services_yaml_path, startup_zip_path):
+        print("✅ Detected prior initialization — skipping SSH and setup.")
+        with open(services_yaml_path, "r") as f:
+            config["services"] = yaml.safe_load(f).get("services", [])
+        return config, None  # Return None for ssh
+
+    # Otherwise, run full flow
+    ssh = setup_ssh_authorized_key(config)
     if not ssh:
         print("❌ SSH setup failed.")
         return config, None
