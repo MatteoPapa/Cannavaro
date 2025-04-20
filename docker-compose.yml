@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   backend:
     build: ./backend
@@ -10,12 +8,14 @@ services:
       - ~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro 
       - ./backend:/app  #DEVELOPMENT
 
-  frontend:
-    build: ./frontend
-    container_name: react-frontend
-    ports:
-      - "7000:7000"
-    depends_on:
-      - backend
-    environment:
-      - VITE_API_PROXY=http://backend:7001
+  # Uncomment the following lines to enable the frontend service in docker (otherwise, run it separately)
+  
+  # frontend:
+  #   build: ./frontend
+  #   container_name: react-frontend
+  #   ports:
+  #     - "7000:7000"
+  #   depends_on:
+  #     - backend
+  #   environment:
+  #     - VITE_API_PROXY=http://backend:7001
