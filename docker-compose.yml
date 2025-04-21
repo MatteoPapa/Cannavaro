@@ -7,6 +7,16 @@ services:
     volumes:
       - ~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro 
       - ./backend:/app  #DEVELOPMENT
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/cannavaro_db 
+
+  mongo:
+    image: mongo:5.0
+    container_name: mongo-db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
 
   # Uncomment the following lines to enable the frontend service in docker (otherwise, run it separately)
   
@@ -19,3 +29,6 @@ services:
   #     - backend
   #   environment:
   #     - VITE_API_PROXY=http://backend:7001
+
+volumes:
+  mongo-data:
