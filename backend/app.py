@@ -42,7 +42,6 @@ def get_startup_zip():
 def get_current_zip():
     if not ssh:
         return jsonify({"error": "SSH not connected"}), 500
-
     try:
         filename = create_timestamped_filename()
         temp_zip_path = create_and_download_zip(ssh, ZIP_BASE_DIR, filename)
@@ -51,6 +50,10 @@ def get_current_zip():
             return jsonify({"error": "Failed to create ZIP"}), 500
 
         stored_path = os.path.join(CURRENT_ZIP_DIR, filename)
+
+        # Ensure target folder exists
+        os.makedirs(CURRENT_ZIP_DIR, exist_ok=True)
+
         os.rename(temp_zip_path, stored_path)
 
         @after_this_request
@@ -64,7 +67,9 @@ def get_current_zip():
         return send_file(stored_path, as_attachment=True)
 
     except Exception as e:
+        print(f"Error creating current zip: {e}")   
         return jsonify({"error": str(e)}), 500
+
 
 @app.route("/api/patches/<service_name>")
 def get_patches(service_name):

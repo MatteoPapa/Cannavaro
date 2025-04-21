@@ -32,6 +32,9 @@ def is_fully_initialized(services_path, startup_zip_path):
     return os.path.exists(startup_zip_path)
 
 def initialize_vm_and_services(config_path, services_yaml_path, zip_base_dir):
+    # Ensure zip folders exist
+    os.makedirs(os.path.join(zip_base_dir, "current_zips"), exist_ok=True)
+    
     config = load_config(config_path)
     startup_zip_path = os.path.join(zip_base_dir, "home_backup_startup.zip")
 
