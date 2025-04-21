@@ -11,6 +11,9 @@ def setup_zip_dirs(base_dir):
     return startup_zip_path, current_zip_dir
 
 def create_and_download_zip(ssh, base_dir, filename="home_backup.zip"):
+    # Ensure zip folder exists
+    os.makedirs(base_dir, exist_ok=True)
+
     remote_dir_to_zip = "/root"
     remote_zip_path = f"/root/{filename}"
 

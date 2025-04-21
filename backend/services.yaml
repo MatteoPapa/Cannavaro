@@ -1,5 +1,4 @@
 # 🔧 Add missing port numbers below before continuing
-# Delete this file to initialize a new Cannavaro instance
 services:
 - name: Notes
   port: 8000
