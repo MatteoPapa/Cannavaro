@@ -75,10 +75,17 @@ function ServicePage() {
   };
 
   if (!service)
-    return <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>;
+    return (
+      <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>
+    );
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4 }}>
+    <Container
+      display="flex"
+      maxWidth="md"
+      justifyContent="center"
+      alignItems="center"
+    >
       <Box sx={{ display: "flex", justifyContent: "center" }}>
         <Button component={Link} to="/" color="action">
           <ArrowBackIcon sx={{ mr: 1 }} />
@@ -95,16 +102,18 @@ function ServicePage() {
         onChange={handleFileChange}
       />
 
-      <DropZone
-        onFileDrop={(file) => {
-          setSelectedFile(file);
-          setUploadDialogOpen(true);
-        }}
-        isDragging={isDragging}
-        setIsDragging={setIsDragging}
-      />
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+        <DropZone
+          onFileDrop={(file) => {
+            setSelectedFile(file);
+            setUploadDialogOpen(true);
+          }}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
+        />
+      </Box>
 
-      <Typography variant="h5" sx={{ mt: 5 }}>
+      <Typography variant="h5" sx={{ mt: 3, mb: 3 }} color="text.primary">
         <HistoryIcon sx={{ verticalAlign: "middle", mr: 1 }} color="primary" />
         Patch History
       </Typography>

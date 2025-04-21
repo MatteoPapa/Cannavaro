@@ -3,6 +3,7 @@ import { Box, Typography } from "@mui/material";
 function DropZone({ onFileDrop, isDragging, setIsDragging }) {
   return (
     <Box
+    justifyContent={"center"}
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragging(true);

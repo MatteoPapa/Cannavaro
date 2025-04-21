@@ -8,7 +8,7 @@ function ServiceHeader({ service, onUploadClick }) {
         {service.name} <Chip label={`${service.port}`} variant="outlined" />
       </Typography>
 
-      <Button variant="contained" color="success" onClick={onUploadClick}>
+      <Button variant="contained" color="secondary" onClick={onUploadClick}>
         <FileUploadIcon sx={{ mr: 1 }} />
         Upload Patch
       </Button>
