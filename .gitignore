@@ -3,3 +3,6 @@ __pycache__/
 .env
 zip
 test_vm
+uploaded_patches
+temp_downloads
+backups

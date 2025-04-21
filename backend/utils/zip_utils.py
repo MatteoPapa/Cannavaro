@@ -1,5 +1,5 @@
 # backend/utils/zip_utils.py
-
+import zipfile
 import os
 import datetime
 
@@ -43,3 +43,11 @@ def create_and_download_zip(ssh, base_dir, filename="home_backup.zip"):
 def create_timestamped_filename():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     return f"home_backup_{timestamp}.zip"
+
+def create_local_backup_zip(folder_path, zip_path):
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, folder_path)
+                zipf.write(full_path, rel_path)

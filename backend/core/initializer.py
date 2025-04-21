@@ -41,10 +41,11 @@ def initialize_vm_and_services(config_path, services_yaml_path, zip_base_dir):
 
     # Skip SSH if everything is already done
     if is_fully_initialized(services_yaml_path, startup_zip_path):
-        print("✅ Detected prior initialization — skipping SSH and setup.")
+        print("✅ Detected prior initialization — skipping initial steps.")
         with open(services_yaml_path, "r") as f:
             config["services"] = yaml.safe_load(f).get("services", [])
-        return config, None  # Return None for ssh
+        ssh = setup_ssh_authorized_key(config)
+        return config, ssh  # Return None for ssh
 
     # Otherwise, run full flow
     ssh = setup_ssh_authorized_key(config)

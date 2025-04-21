@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_file, request
+from flask import Flask, jsonify, send_file, request, after_this_request
 from flask_cors import CORS
 import os
 from core.initializer import *
@@ -53,6 +53,14 @@ def get_current_zip():
         stored_path = os.path.join(CURRENT_ZIP_DIR, filename)
         os.rename(temp_zip_path, stored_path)
 
+        @after_this_request
+        def cleanup(response):
+            try:
+                os.remove(stored_path)
+            except Exception as e:
+                print(f"Failed to delete temporary zip: {e}")
+            return response
+
         return send_file(stored_path, as_attachment=True)
 
     except Exception as e:
@@ -66,6 +74,7 @@ def get_patches(service_name):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+
 @app.route("/api/upload_patch", methods=["POST"])
 def upload_patch():
     if "file" not in request.files or not request.form.get("service") or not request.form.get("description"):
@@ -79,13 +88,24 @@ def upload_patch():
         return jsonify({"error": "No selected file"}), 400
 
     try:
-        filename, filepath = save_patch_file(file)
-        patch_id = log_patch_to_db(service, description, filename, filepath)
+        # Step 1: Use the original filename
+        filename = secure_filename(file.filename)
+
+        # Step 2: Apply patch directly using file stream
+        result = apply_patch_on_vm_stream(ssh, filename, file, service)
+
+        if not result["success"]:
+            print(f"Patch application failed: {result['message']}")
+            return jsonify({"error": result["message"]}), 404
+
+        # Step 3: Log patch only if all successful (no local filepath)
+        patch_id = log_patch_to_db(service, description, filename, None)
 
         return jsonify({
-            "message": "Patch uploaded and logged successfully",
+            "message": "Patch uploaded, applied, and logged successfully",
             "patch_id": str(patch_id),
-            "filename": filename
+            "filename": filename,
+            "backup": result.get("backup")
         }), 201
 
     except Exception as e:

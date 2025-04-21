@@ -1,8 +1,9 @@
 # 🔧 Add missing port numbers below before continuing
+# Delete this file to initialize a new Cannavaro instance
 services:
-- name: Chall1
-  port: 800
-- name: Chall2
-  port: 234
-- name: Chall3
-  port: 125
+- name: Notes
+  port: 8000
+- name: PCSS
+  port: 3000
+- name: Pwnzer0tt1Shop
+  port: 80
