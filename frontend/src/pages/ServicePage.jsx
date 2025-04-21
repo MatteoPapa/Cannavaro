@@ -1,11 +1,13 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useState, useRef } from "react";
-import { Container, Typography, Box, Button, Chip } from "@mui/material";
+import { Container, Typography, Box, Button } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import FileUploadIcon from "@mui/icons-material/FileUpload";
 import HistoryIcon from "@mui/icons-material/History";
+
 import PatchCard from "../components/PatchCard";
 import UploadPatchDialog from "../components/UploadPatchDialog";
+import ServiceHeader from "../components/ServiceHeader";
+import DropZone from "../components/DropZone";
 
 function ServicePage() {
   const { name } = useParams();
@@ -73,125 +75,74 @@ function ServicePage() {
   };
 
   if (!service)
-    return (
-      <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>
-    );
+    return <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>;
 
   return (
-      <Container maxWidth="md" sx={{ mt: 4 }}>
-        <Box sx={{ display: "flex", justifyContent: "center" }}>
-          <Button component={Link} to="/" color="action">
-            <ArrowBackIcon sx={{ mr: 1 }} />
-            Back
-          </Button>
-        </Box>
+    <Container maxWidth="md" sx={{ mt: 4 }}>
+      <Box sx={{ display: "flex", justifyContent: "center" }}>
+        <Button component={Link} to="/" color="action">
+          <ArrowBackIcon sx={{ mr: 1 }} />
+          Back
+        </Button>
+      </Box>
 
+      <ServiceHeader service={service} onUploadClick={handleUploadClick} />
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: "none" }}
+        onChange={handleFileChange}
+      />
+
+      <DropZone
+        onFileDrop={(file) => {
+          setSelectedFile(file);
+          setUploadDialogOpen(true);
+        }}
+        isDragging={isDragging}
+        setIsDragging={setIsDragging}
+      />
+
+      <Typography variant="h5" sx={{ mt: 5 }}>
+        <HistoryIcon sx={{ verticalAlign: "middle", mr: 1 }} color="primary" />
+        Patch History
+      </Typography>
+
+      {patches.length === 0 ? (
+        <Typography variant="h5" sx={{ mt: 5 }} color="text.secondary">
+          No patches found.
+        </Typography>
+      ) : (
         <Box
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          flexDirection="column"
-          gap={3}
-          sx={{ mb: 3 }}
+          sx={{
+            position: "relative",
+            pl: 3,
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              top: 0,
+              left: 15,
+              width: "2px",
+              height: "100%",
+              bgcolor: "primary.main",
+            },
+          }}
         >
-          <Typography variant="h3" color="primary">
-            {service.name} <Chip label={`${service.port}`} variant="outlined" />
-          </Typography>
-
-          <Button
-            variant="contained"
-            color="success"
-            onClick={handleUploadClick}
-          >
-            <FileUploadIcon sx={{ mr: 1 }} />
-            Upload Patch
-          </Button>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            onChange={handleFileChange}
-          />
-
-          <Box
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              setIsDragging(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDragging(false);
-              const file = e.dataTransfer.files[0];
-              if (file) {
-                setSelectedFile(file);
-                setUploadDialogOpen(true);
-              }
-            }}
-            sx={{
-              border: "2px dashed",
-              borderColor: isDragging ? "primary.main" : "grey.400",
-              borderRadius: 2,
-              width: "100%",
-              maxWidth: 400,
-              textAlign: "center",
-              py: 3,
-              px: 2,
-              bgcolor: isDragging ? "#202020" : "transparent",
-              color: "text.secondary",
-              transition: "0.2s",
-            }}
-          >
-            <Typography variant="body2">Or drop a file here</Typography>
-          </Box>
-
-          <Typography variant="h5">
-            <HistoryIcon
-              sx={{ verticalAlign: "middle", mr: 1 }}
-              color="primary"
-            />
-            Patch History
-          </Typography>
+          {patches.map((patch) => (
+            <PatchCard key={patch.id} patch={patch} />
+          ))}
         </Box>
+      )}
 
-        {patches.length === 0 ? (
-          <Typography variant="h5" sx={{ mt: 5 }} color="text.secondary">
-            No patches found.
-          </Typography>
-        ) : (
-          <Box
-            sx={{
-              position: "relative",
-              pl: 3,
-              "&::before": {
-                content: '""',
-                position: "absolute",
-                top: 0,
-                left: 15,
-                width: "2px",
-                height: "100%",
-                bgcolor: "primary.main",
-              },
-            }}
-          >
-            {patches.map((patch) => (
-              <PatchCard key={patch.id} patch={patch} />
-            ))}
-          </Box>
-        )}
-
-        <UploadPatchDialog
-          open={uploadDialogOpen}
-          onClose={() => setUploadDialogOpen(false)}
-          onUpload={handleUpload}
-          description={description}
-          setDescription={setDescription}
-        />
-      </Container>
+      <UploadPatchDialog
+        open={uploadDialogOpen}
+        onClose={() => setUploadDialogOpen(false)}
+        onUpload={handleUpload}
+        description={description}
+        setDescription={setDescription}
+      />
+    </Container>
   );
 }
 
