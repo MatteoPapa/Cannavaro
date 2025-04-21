@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Container,
   Typography,
@@ -14,6 +14,14 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import HistoryIcon from "@mui/icons-material/History";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+} from "@mui/material";
 
 function ServicePage() {
   const { name } = useParams();
@@ -27,7 +35,7 @@ function ServicePage() {
       .then((services) => {
         const found = services.find((s) => s.name === name);
         setService(found);
-        
+
         // Fetch patches only if service is found
         if (found) {
           fetch(`/api/patches/${found.name}`)
@@ -38,13 +46,31 @@ function ServicePage() {
       });
   }, [name]);
 
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [description, setDescription] = useState("");
+
+  const fileInputRef = useRef();
+
+  const handleUploadClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      setUploadDialogOpen(true);
+    }
+  };
+
   if (!service)
     return (
       <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>
     );
 
   return (
-    <Container maxWidth="md" sx={{ mt: 5 }}>
+    <Container maxWidth="md" sx={{ mt: 4 }}>
       <Box sx={{ display: "flex", justifyContent: "center" }}>
         <Button component={Link} to="/" color="action">
           <ArrowBackIcon sx={{ mr: 1 }} />
@@ -52,17 +78,43 @@ function ServicePage() {
         </Button>
       </Box>
 
-      <Typography variant="h3" color="primary" sx={{ mb: 1 }}>
-        {service.name} <Chip label={`${service.port}`} variant="outlined" />
-      </Typography>
+      <Box
+        display={"flex"}
+        alignItems="center"
+        justifyContent="center"
+        flexDirection={"column"}
+        gap={3}
+        sx={{ mb: 3 }}
+      >
+        <Typography variant="h3" color="primary">
+          {service.name} <Chip label={`${service.port}`} variant="outlined" />
+        </Typography>
+        <Button
+          variant={"contained"}
+          color="success"
+          onClick={handleUploadClick}
+        >
+          <FileUploadIcon sx={{ mr: 1 }} />
+          Upload Patch
+        </Button>
 
-      <Typography variant="h5" sx={{ mb: 3, mt: 2 }}>
-        <HistoryIcon sx={{ verticalAlign: "middle", mr: 1 }} color="primary" />
-        Patch History
-      </Typography>
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: "none" }}
+          onChange={handleFileChange}
+        />
+        <Typography variant="h5">
+          <HistoryIcon
+            sx={{ verticalAlign: "middle", mr: 1 }}
+            color="primary"
+          />
+          Patch History
+        </Typography>
+      </Box>
 
       {patches.length === 0 ? (
-        <Typography variant="body1" sx={{ mt: 2 }}>
+        <Typography variant="h5" sx={{ mt: 5 }} color="text.secondary">
           No patches found.
         </Typography>
       ) : (
@@ -119,7 +171,6 @@ function ServicePage() {
                       </Typography>
                       <Chip
                         label={patch.status?.toUpperCase() || "UNKNOWN"}
-                        size="small"
                         variant="outlined"
                         color={
                           patch.status === "confirmed"
@@ -128,7 +179,6 @@ function ServicePage() {
                             ? "warning"
                             : "default"
                         }
-                        sx={{ ml: 1 }}
                       />
                     </Box>
 
@@ -155,6 +205,62 @@ function ServicePage() {
           ))}
         </Box>
       )}
+      <Dialog
+        open={uploadDialogOpen}
+        onClose={() => setUploadDialogOpen(false)}
+      >
+        <DialogTitle>Upload Patch for {service?.name}</DialogTitle>
+        <DialogContent sx={{ minWidth: 600 }}>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Description"
+            fullWidth
+            multiline
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUploadDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={async () => {
+              if (!selectedFile || !description) return;
+
+              const formData = new FormData();
+              formData.append("file", selectedFile);
+              formData.append("description", description);
+              formData.append("service", service.name);
+
+              try {
+                const res = await fetch("/api/upload_patch", {
+                  method: "POST",
+                  body: formData,
+                });
+
+                if (!res.ok) throw new Error("Upload failed");
+                // eslint-disable-next-line no-unused-vars
+                const result = await res.json();
+
+                // refresh patch list
+                const updatedPatches = await fetch(
+                  `/api/patches/${service.name}`
+                ).then((r) => r.json());
+                setPatches(updatedPatches);
+
+                // reset UI
+                setDescription("");
+                setSelectedFile(null);
+                setUploadDialogOpen(false);
+              } catch (err) {
+                console.error("Upload error:", err);
+              }
+            }}
+          >
+            Upload
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }
