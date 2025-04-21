@@ -18,45 +18,23 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 function ServicePage() {
   const { name } = useParams();
   const [service, setService] = useState(null);
-
-  const fakePatches = [
-    {
-      id: 1,
-      description: "Fixed remote code execution",
-      timestamp: "2025-04-10 14:35",
-      confirmed: false,
-    },
-    {
-      id: 2,
-      description: "Patched SQL injection",
-      timestamp: "2025-03-28 09:20",
-      confirmed: true,
-    },
-    {
-      id: 3,
-      description: "Updated logging mechanism",
-      timestamp: "2025-03-01 17:02",
-      confirmed: true,
-    },
-    {
-      id: 4,
-      description: "Cooked some spaghetti",
-      timestamp: "2025-03-01 13:43",
-      confirmed: true,
-    },    {
-      id: 5,
-      description: "Watered the plants",
-      timestamp: "2025-03-01 12:21",
-      confirmed: true,
-    },
-  ];
+  const [patches, setPatches] = useState([]);
 
   useEffect(() => {
+    // Fetch service info
     fetch("/api/services")
       .then((res) => res.json())
       .then((services) => {
         const found = services.find((s) => s.name === name);
         setService(found);
+        
+        // Fetch patches only if service is found
+        if (found) {
+          fetch(`/api/patches/${found.name}`)
+            .then((res) => res.json())
+            .then((data) => setPatches(data))
+            .catch((err) => console.error("Error fetching patches:", err));
+        }
       });
   }, [name]);
 
@@ -83,96 +61,100 @@ function ServicePage() {
         Patch History
       </Typography>
 
-      <Box
-        sx={{
-          position: "relative",
-          pl: 3,
-          "&::before": {
-            content: '""',
-            position: "absolute",
-            top: 0,
-            left: 15,
-            width: "2px",
-            height: "100%",
-            bgcolor: "primary.main",
-          },
-        }}
-      >
-        {[...fakePatches].map((patch) => (
-          <Box key={patch.id} sx={{ position: "relative", mb: 3 }}>
-            <Box
-              sx={{
-                position: "absolute",
-                top: 18,
-                left: -4,
-                width: 12,
-                height: 12,
-                bgcolor: "primary.main",
-                borderRadius: "50%",
-              }}
-            />
-            <Card
-              variant="outlined"
-              sx={{
-                borderRadius: 2,
-                px: 2,
-                py: 1.5,
-                ml: 3,
-                transition: "0.2s",
-              }}
-            >
-              <CardContent>
-                <Box
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="space-between"
-                  gap={1}
-                  mb={1}
-                >
+      {patches.length === 0 ? (
+        <Typography variant="body1" sx={{ mt: 2 }}>
+          No patches found.
+        </Typography>
+      ) : (
+        <Box
+          sx={{
+            position: "relative",
+            pl: 3,
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              top: 0,
+              left: 15,
+              width: "2px",
+              height: "100%",
+              bgcolor: "primary.main",
+            },
+          }}
+        >
+          {patches.map((patch) => (
+            <Box key={patch.id} sx={{ position: "relative", mb: 3 }}>
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 18,
+                  left: -4,
+                  width: 12,
+                  height: 12,
+                  bgcolor: "primary.main",
+                  borderRadius: "50%",
+                }}
+              />
+              <Card
+                variant="outlined"
+                sx={{
+                  borderRadius: 2,
+                  px: 2,
+                  py: 1.5,
+                  ml: 3,
+                  transition: "0.2s",
+                }}
+              >
+                <CardContent>
+                  <Box
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    gap={1}
+                    mb={1}
+                  >
+                    <Box display="flex" alignItems="center" gap={1}>
+                      <BugReportIcon color="primary" />
+                      <Typography variant="body1">
+                        {patch.description}
+                      </Typography>
+                      <Chip
+                        label={patch.status?.toUpperCase() || "UNKNOWN"}
+                        size="small"
+                        variant="outlined"
+                        color={
+                          patch.status === "confirmed"
+                            ? "success"
+                            : patch.status === "pending"
+                            ? "warning"
+                            : "default"
+                        }
+                        sx={{ ml: 1 }}
+                      />
+                    </Box>
+
+                    <Box display="flex" gap={1}>
+                      <Button size="small" variant="outlined" color="error">
+                        Revert to
+                      </Button>
+                      <Button size="small" variant="contained" color="primary">
+                        Action
+                      </Button>
+                    </Box>
+                  </Box>
+
+                  <Divider sx={{ my: 1 }} />
                   <Box display="flex" alignItems="center" gap={1}>
-                    <BugReportIcon color="primary" />
-                    <Typography variant="body1">{patch.description}</Typography>
-                    {patch.confirmed ? (
-                      <Chip
-                        label="CONFIRMED"
-                        size="small"
-                        variant="outlined"
-                        color="success"
-                        sx={{ ml: 1 }}
-                      />
-                    ) : (
-                      <Chip
-                        label="PENDING"
-                        size="small"
-                        variant="outlined"
-                        color="warning"
-                        sx={{ ml: 1 }}
-                      />
-                    )}
+                    <AccessTimeIcon fontSize="small" color="action" />
+                    <Typography variant="body2" color="text.secondary">
+                      {new Date(patch.timestamp).toLocaleString()}
+                    </Typography>
                   </Box>
-
-                  <Box display="flex" gap={1}>
-                    <Button size="small" variant="outlined" color="error">
-                      Revert to
-                    </Button>
-                    <Button size="small" variant="contained" color="primary">
-                      Action
-                    </Button>
-                  </Box>
-                </Box>
-
-                <Divider sx={{ my: 1 }} />
-                <Box display="flex" alignItems="center" gap={1}>
-                  <AccessTimeIcon fontSize="small" color="action" />
-                  <Typography variant="body2" color="text.secondary">
-                    {patch.timestamp}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Box>
-        ))}
-      </Box>
+                </CardContent>
+              </Card>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Container>
   );
 }

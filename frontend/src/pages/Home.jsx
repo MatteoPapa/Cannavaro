@@ -19,7 +19,6 @@ function Home() {
   const [vmIp, setVmIp] = useState("");
 
   useEffect(() => {
-    console.log("Fetching services and VM IP...");
     fetch("/api/services")
       .then((res) => res.json())
       .then(setServices);
