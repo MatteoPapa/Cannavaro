@@ -12,36 +12,35 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 
-export default function PatchCard({ patch }) {
+export default function PatchCard({ patch, refetch }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionType, setActionType] = useState(null); // 'delete' or 'confirm'
 
   const handleAction = (type) => {
+    document.activeElement?.blur();
     setActionType(type);
     setDialogOpen(true);
   };
 
   const handleConfirm = async () => {
     setDialogOpen(false);
-  
+
     try {
       if (actionType === "delete") {
-        // "DELETE" button = Revert patch
         const res = await fetch(`/api/revert_patch/${patch.id}`, {
           method: "POST",
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Revert failed");
-        alert(`Service reverted to state before patch "${patch.description}"`);
       } else if (actionType === "confirm") {
-        // "CONFIRM" button = Confirm patch (status update)
         const res = await fetch(`/api/confirm_patch/${patch.id}`, {
           method: "POST",
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Confirmation failed");
-        alert(`Patch "${patch.description}" confirmed.`);
       }
+
+      refetch();
     } catch (err) {
       alert(`❌ ${err.message}`);
     }
@@ -131,12 +130,13 @@ export default function PatchCard({ patch }) {
 
       <ConfirmDialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          setDialogOpen(false);
+          document.activeElement?.blur(); // 👈 optional: clear lingering focus
+        }}
         onConfirm={handleConfirm}
         title={
-          actionType === "delete"
-            ? "Confirm Delete"
-            : "Confirm Patch Action"
+          actionType === "delete" ? "Confirm Delete" : "Confirm Patch Action"
         }
         description={
           actionType === "delete"

@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Container, Typography, Box, Button } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import HistoryIcon from "@mui/icons-material/History";
@@ -20,21 +20,29 @@ function ServicePage() {
 
   const fileInputRef = useRef();
 
+  const refetchPatches = useCallback(async () => {
+    if (!service?.name) return;
+    const updated = await fetch(`/api/patches/${service.name}`).then((r) => r.json());
+    setPatches(updated);
+  }, [service?.name]);
+
   useEffect(() => {
     fetch("/api/services")
       .then((res) => res.json())
       .then((services) => {
         const found = services.find((s) => s.name === name);
         setService(found);
-        if (found) {
-          fetch(`/api/patches/${found.name}`)
-            .then((res) => res.json())
-            .then((data) => setPatches(data));
-        }
       });
   }, [name]);
 
+  useEffect(() => {
+    if (service) {
+      refetchPatches();
+    }
+  }, [service, refetchPatches]);
+
   const handleUploadClick = () => {
+    document.activeElement?.blur(); // fix potential aria-hidden focus bug
     fileInputRef.current.click();
   };
 
@@ -43,6 +51,7 @@ function ServicePage() {
     if (file) {
       setSelectedFile(file);
       setUploadDialogOpen(true);
+      e.target.value = ""; // allow re-selecting same file
     }
   };
 
@@ -62,10 +71,7 @@ function ServicePage() {
 
       if (!res.ok) throw new Error("Upload failed");
 
-      const updated = await fetch(`/api/patches/${service.name}`).then((r) =>
-        r.json()
-      );
-      setPatches(updated);
+      await refetchPatches();
       setDescription("");
       setSelectedFile(null);
       setUploadDialogOpen(false);
@@ -74,16 +80,12 @@ function ServicePage() {
     }
   };
 
-  if (!service)
-    return (
-      <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>
-    );
+  if (!service) {
+    return <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>;
+  }
 
   return (
-    <Container
-      display="flex"
-      maxWidth="md"
-    >
+    <Container display="flex" maxWidth="md">
       <Box sx={{ display: "flex", justifyContent: "center" }}>
         <Button component={Link} to="/" color="action">
           <ArrowBackIcon sx={{ mr: 1 }} />
@@ -137,14 +139,18 @@ function ServicePage() {
           }}
         >
           {patches.map((patch) => (
-            <PatchCard key={patch.id} patch={patch} />
+            <PatchCard key={patch.id} patch={patch} refetch={refetchPatches} />
           ))}
         </Box>
       )}
 
       <UploadPatchDialog
         open={uploadDialogOpen}
-        onClose={() => setUploadDialogOpen(false)}
+        onClose={() => {
+          setUploadDialogOpen(false);
+          setSelectedFile(null);
+          document.activeElement?.blur(); // optional: help with a11y
+        }}
         onUpload={handleUpload}
         description={description}
         setDescription={setDescription}
