@@ -21,7 +21,10 @@ function Home() {
   useEffect(() => {
     fetch("/api/services")
       .then((res) => res.json())
-      .then(setServices);
+      .then((data) => {
+        console.log("Fetched services:", data);
+        setServices(Array.isArray(data) ? data : data.services || []);
+      });
 
     fetch("/api/vm_ip")
       .then((res) => res.json())

@@ -4,17 +4,17 @@ import os
 def ensure_remote_dependencies(ssh):
     """
     Installs required packages on the remote VM using apt.
-    Currently installs: zip
+    Currently installs: zip, rsync
     """
     try:
-        print("📦 Ensuring dependencies are installed on remote VM...")
+        print("📦 Ensuring dependencies (zip, rsync) are installed on remote VM...")
 
-        # Update apt and install zip silently
-        update_cmd = "apt-get update -y"
-        install_cmd = "apt-get install -y zip"
+        commands = [
+            "apt-get update -y",
+            "apt-get install -y zip rsync"
+        ]
 
-        # Run both commands and wait for them to complete
-        for cmd in [update_cmd, install_cmd]:
+        for cmd in commands:
             stdin, stdout, stderr = ssh.exec_command(cmd)
             exit_status = stdout.channel.recv_exit_status()
             if exit_status != 0:

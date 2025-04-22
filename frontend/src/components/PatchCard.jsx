@@ -21,14 +21,29 @@ export default function PatchCard({ patch }) {
     setDialogOpen(true);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setDialogOpen(false);
-    if (actionType === "delete") {
-      console.log(`Deleting patch ${patch.id}`);
-      // call delete endpoint here
-    } else if (actionType === "confirm") {
-      console.log(`Confirming patch ${patch.id}`);
-      // call confirm endpoint here
+  
+    try {
+      if (actionType === "delete") {
+        // "DELETE" button = Revert patch
+        const res = await fetch(`/api/revert_patch/${patch.id}`, {
+          method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Revert failed");
+        alert(`Service reverted to state before patch "${patch.description}"`);
+      } else if (actionType === "confirm") {
+        // "CONFIRM" button = Confirm patch (status update)
+        const res = await fetch(`/api/confirm_patch/${patch.id}`, {
+          method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Confirmation failed");
+        alert(`Patch "${patch.description}" confirmed.`);
+      }
+    } catch (err) {
+      alert(`❌ ${err.message}`);
     }
   };
 

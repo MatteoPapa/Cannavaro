@@ -83,8 +83,6 @@ function ServicePage() {
     <Container
       display="flex"
       maxWidth="md"
-      justifyContent="center"
-      alignItems="center"
     >
       <Box sx={{ display: "flex", justifyContent: "center" }}>
         <Button component={Link} to="/" color="action">
