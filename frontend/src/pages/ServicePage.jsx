@@ -119,9 +119,11 @@ function ServicePage() {
 
   return (
     <Container display="flex" maxWidth="md">
-      <Box sx={{ display: "flex", justifyContent: "center" }}>
-        <Button component={Link} to="/" color="action">
-          <ArrowBackIcon sx={{ mr: 1 }} />
+      <Box sx={{ display: "flex", justifyContent: "center", position: "absolute" }} mb={2}>
+        <Button component={Link} to="/" color="action" sx={{ mb: 2, ":hover":{
+          backgroundColor: "action.hover", color: "text.primary"
+        } }}>
+          <ArrowBackIcon sx={{ mr: 1}} fontSize="large"/>
           Back
         </Button>
       </Box>
@@ -133,22 +135,15 @@ function ServicePage() {
         <>
           <Box display={"flex"} justifyContent="center" gap={2}>
             <Button
-              variant="contained"
+              variant="outlined"
               onClick={handleResetDocker}
-              sx={{
-                backgroundColor: "white",
-                color: "black",
-                "&:hover": {
-                  backgroundColor: "#e0e0e0",
-                },
-              }}
             >
               <DockerLogo size={25} mr={4} />
               Restart Docker
             </Button>
 
             <Button
-              variant="contained"
+              variant="outlined"
               color="secondary"
               onClick={handleUploadClick}
             >

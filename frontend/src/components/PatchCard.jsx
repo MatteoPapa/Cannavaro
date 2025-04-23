@@ -96,9 +96,9 @@ export default function PatchCard({
             gap={1}
             mb={1}
           >
-            <Box display="flex" alignItems="center" gap={1}>
+            <Box display="flex" alignItems="center" gap={1} maxWidth={"70%"}>
               <BugReportIcon color="primary" />
-              <Typography variant="body1">{patch.description}</Typography>
+              <Typography variant="body1" textAlign={"left"}>{patch.description}</Typography>
               <Chip
                 label={patch.status?.toUpperCase() || "UNKNOWN"}
                 variant="outlined"

@@ -16,7 +16,15 @@ export default function UploadPatchDialog({
 }) {
   return (
     <Dialog open={open} onClose={onClose}>
-      <DialogTitle>Upload Patch</DialogTitle>
+      <DialogTitle
+        sx={{
+          textAlign: "center",
+          fontSize: "1.3rem",
+          fontWeight: "bold",
+        }}
+      >
+        Choose Description
+      </DialogTitle>
       <DialogContent sx={{ minWidth: 600 }}>
         <TextField
           autoFocus
@@ -34,9 +42,11 @@ export default function UploadPatchDialog({
           }}
         />
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ justifyContent: "center" }}>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={onUpload}>Upload</Button>
+        <Button onClick={onUpload} color="primary" variant="contained">
+          Upload
+        </Button>
       </DialogActions>
     </Dialog>
   );

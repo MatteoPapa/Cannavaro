@@ -32,7 +32,7 @@ export default function DownloadButtons() {
   return (
     <Box display={"flex"} justifyContent="center" mb={2} gap={2}>
       <Button
-        variant="contained"
+        variant="outlined"
         color="primary"
         sx={{ mb: 2 }}
         onClick={() => handleDownload("/api/get_startup_zip", "home_backup_startup.zip")}
@@ -42,7 +42,7 @@ export default function DownloadButtons() {
       </Button>
 
       <Button
-        variant="contained"
+        variant="outlined"
         color="secondary"
         sx={{ mb: 2 }}
         onClick={() => handleDownload("/api/get_current_zip", `home_backup_${Date.now()}.zip`)}
