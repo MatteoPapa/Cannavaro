@@ -22,7 +22,6 @@ function Home() {
     fetch("/api/services")
       .then((res) => res.json())
       .then((data) => {
-        console.log("Fetched services:", data);
         setServices(Array.isArray(data) ? data : data.services || []);
       });
 

@@ -209,6 +209,25 @@ def confirm_patch(patch_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/reset_docker", methods=["POST"])
+def reset_docker():
+    data = request.get_json()
+    service = data.get("service")
+
+    if not service:
+        return jsonify({"error": "Missing 'service' in request"}), 400
+
+    # Call your docker restart logic
+    restart_result = restart_docker_service(ssh, service)
+    if not restart_result["success"]:
+        return jsonify({
+            "error": "Failed to restart Docker service",
+            "details": restart_result["error"]
+        }), 500
+
+    return jsonify({"message": "Docker service restarted successfully."}), 200
+
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_react(path):

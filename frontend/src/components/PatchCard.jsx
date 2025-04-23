@@ -11,10 +11,18 @@ import BugReportIcon from "@mui/icons-material/BugReport";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
+import { useAlert } from "../context/AlertContext";
 
-export default function PatchCard({ patch, refetch, isFirst, isConfirmed }) {
+export default function PatchCard({
+  patch,
+  refetch,
+  isFirst,
+  isConfirmed,
+  setRestartingDocker,
+}) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionType, setActionType] = useState(null); // 'delete' or 'confirm'
+  const { showAlert } = useAlert();
 
   const handleAction = (type) => {
     document.activeElement?.blur();
@@ -25,12 +33,18 @@ export default function PatchCard({ patch, refetch, isFirst, isConfirmed }) {
   const handleConfirm = async () => {
     setDialogOpen(false);
 
+    let usedRestart = false;
+
     try {
       if (actionType === "delete") {
+        setRestartingDocker(true);
+        usedRestart = true;
+
         const res = await fetch(`/api/revert_patch/${patch.id}`, {
           method: "POST",
         });
         const data = await res.json();
+        
         if (!res.ok) throw new Error(data.error || "Revert failed");
       } else if (actionType === "confirm") {
         const res = await fetch(`/api/confirm_patch/${patch.id}`, {
@@ -42,7 +56,12 @@ export default function PatchCard({ patch, refetch, isFirst, isConfirmed }) {
 
       refetch();
     } catch (err) {
-      alert(`❌ ${err.message}`);
+      showAlert({
+        message: err.message || "An error occurred",
+        severity: "error",
+      });
+    } finally {
+      if (usedRestart) setRestartingDocker(false);
     }
   };
 

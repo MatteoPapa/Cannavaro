@@ -1,0 +1,4 @@
+services:
+  frontend:
+    image: alpine
+    command: [sh, -c, "echo 'Skipping frontend build in dev mode' && sleep 99999"]

@@ -8,5 +8,6 @@ RUN pip install -r requirements.txt
 COPY . .
 
 EXPOSE 7000
-# CMD ["python3", "app.py"]
-CMD ["tail", "-f", "/dev/null"]
+
+CMD ["python3", "app.py"]
+# CMD ["tail", "-f", "/dev/null"] # Uncomment for debugging purposes
