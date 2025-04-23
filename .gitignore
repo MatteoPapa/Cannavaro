@@ -2,8 +2,8 @@ node_modules/
 __pycache__/
 .env
 zip
-test_vm
 uploaded_patches
 temp_downloads
 backups
 backend/services.yaml
+remote_vm_example/index.html
