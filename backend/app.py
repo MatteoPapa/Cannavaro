@@ -111,6 +111,10 @@ def upload_patch():
             result.get("backup")
         )
 
+        # Step 4: Restart Docker Service
+        restart_result = restart_docker_service(ssh, service)
+        if not restart_result["success"]:
+            return jsonify({"error": "Patch applied but failed to restart service", "details": restart_result["error"]}), 500
 
         return jsonify({
             "message": "Patch uploaded, applied, and logged successfully",
@@ -182,6 +186,11 @@ def revert_patch(patch_id):
         # Step 5: Remove the patch record
         db.patches.delete_one({"_id": patch["_id"]})
         print(f"[SUCCESS] Patch reverted and deleted: {patch_id}")
+
+        # Step 6: Restart Docker Service
+        restart_result = restart_docker_service(ssh, patch["service"])
+        if not restart_result["success"]:
+            return jsonify({"error": "Revert succeeded but failed to restart docker service", "details": restart_result["error"]}), 500
 
         return jsonify({"message": f"Patch reverted and original file restored."}), 200
 

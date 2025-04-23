@@ -114,3 +114,17 @@ def apply_patch_on_vm_stream(ssh, filename, file_obj, service_name):
     except Exception as e:
         print("Failed to apply patch")
         return {"success": False, "message": str(e)}
+
+def restart_docker_service(ssh, service_name):
+    service_path = f"/root/{service_name}"  # Adjust this path as needed
+    commands = [
+        f"cd {service_path} && docker compose build",
+        f"cd {service_path} && docker compose down && docker compose up -d"
+    ]
+    for cmd in commands:
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        if stdout.channel.recv_exit_status() != 0:
+            error = stderr.read().decode().strip()
+            print(f"[ERROR] Failed to run: {cmd}\n{error}")
+            return {"success": False, "error": error}
+    return {"success": True}

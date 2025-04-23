@@ -1,4 +1,4 @@
 vm_ip: host.docker.internal
 #vm_ip: 127.0.0.1
 vm_password: rootpassword
-ssh_port: 2222
+ssh_port: 2222 #22 is default
