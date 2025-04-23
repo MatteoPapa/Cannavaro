@@ -1,5 +1,9 @@
 # Cannavaro 🛡️
 
+<h3 align="center">
+  <img src="https://github.com/user-attachments/assets/fb32d4e0-c403-48b5-8dab-5f74b3015e21" alt="Cannavaro Screenshot" />
+</h3>
+
 **Cannavaro** is a powerful tool built to streamline and support the defense side of Attack/Defense Capture The Flag (CTF) competitions.
 
 It automates tedious tasks, enables easy patching of remote services, and provides a modern interface for applying and managing changes on-the-fly.
