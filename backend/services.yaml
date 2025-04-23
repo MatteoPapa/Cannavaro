@@ -1,8 +1,0 @@
-# 🔧 Add missing port numbers below before continuing
-services:
-- name: Notes
-  port: 8000
-- name: PCSS
-  port: 3000
-- name: Pwnzer0tt1Shop
-  port: 80

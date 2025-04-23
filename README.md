@@ -1,77 +1,75 @@
-# Project Name
+# Cannavaro 🛡️
 
-A brief description of your project goes here.
+**Cannavaro** is a powerful tool built to streamline and support the defense side of Attack/Defense Capture The Flag (CTF) competitions.
 
-## Overview
+It automates tedious tasks, enables easy patching of remote services, and provides a modern interface for applying and managing changes on-the-fly.
 
-This project consists of two main parts:
+---
 
-- **Backend:** A Python application located in the `backend` folder.
-- **Frontend:** A React-based application located in the `frontend` folder.
+## 🧠 What It Does
 
-## Getting Started
+- 🔐 Seamless SSH setup – Automatically configures SSH access to remote virtual machines.
+- 🔍 Service discovery – Detects and lists all active services on the remote VM, along with their exposed ports.
+- 📦 File versioning – Allows you to download both the original and current versions of remote files as ZIP archives.
+- 🩹 Effortless patching – Apply patches by simply dragging and dropping the modified files.
+- ↩️ One-click rollback – Instantly revert to a previous state if a patch doesn't work as expected.
 
-Follow these instructions to get both the backend and frontend running.
+---
 
-### Prerequisites
+## 🚀 Getting Started
 
-- **Backend:** Python 3.x installed.
-- **Frontend:** Node.js (with npm) installed.
+You can run **Cannavaro** using Docker Compose. Even easier, just use the provided startup scripts:
 
-### Installation
+- On **Windows**: run `start.bat`
+- On **Linux/macOS/WSL**: run `start.sh`
 
-#### 1. Clone the Repository
+### Manual Setup
+
+If a services.yaml file is present in the backend/ directory, the server will resume from the previous session.
+To start fresh, simply delete this file before launching the containers.
 
 ```bash
-git clone https://github.com/<your-username>/<repository-name>.git
-cd <repository-name>
+docker compose down
+docker compose up --build
 ```
 
-#### 2. Setup the Backend
+---
 
-1. Navigate to the `backend` directory:
-   ```bash
-   cd backend
-   ```
-2. (Optional) Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-   ```
-3. Install required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Run the backend application:
-   ```bash
-   python app.py
-   ```
-   The backend server will start on port **7001**.
+## ⚙️ Tech Stack
 
-#### 3. Setup the Frontend
+- 🧠 **Backend**: Flask (Python)
+- 🎨 **Frontend**: React + Vite.js
+- 🧩 **UI**: Material UI for a sleek, modern interface
+- 🐋 **Containerization**: Docker + Docker Compose
+- 🧱 **Database**: MongoDB (used for storing and retrieving session-related data)
 
-1. Open a new terminal window/tab.
-2. Navigate to the `frontend` directory:
-   ```bash
-   cd frontend
-   ```
-3. Install required dependencies:
-   ```bash
-   npm install
-   ```
-4. Run the frontend application:
-   ```bash
-   npm run dev
-   ```
-   The frontend development server will start on port **7000**.
+---
 
-## Usage
+## 📁 Project Structure
 
-After starting both the backend and frontend servers, you can access the frontend via your browser at:
 ```
-http://localhost:7000
+Cannavaro/
+├── backend/
+│   ├── services.yaml (generated during usage)
+│   └── ... (Flask app)
+├── frontend/
+│   └── ... (React app)
+├── start.sh
+├── start.bat
+└── docker-compose.yml
 ```
-The frontend will automatically communicate with the backend running on:
-```
-http://localhost:7001
-```
+
+---
+
+## 🤝 Contributions
+
+Coming soon — for now, feel free to fork the repo or use it privately during competitions!
+
+---
+
+## 📢 Notes
+
+- Designed for fast-paced competitive environments — keep your head in the game, not in the terminal.
+- Cannavaro is named after Fabio Cannavaro — a wall in defense, just like this tool aims to be.
+
+Good luck, and happy defending! 🛡️⚔️
