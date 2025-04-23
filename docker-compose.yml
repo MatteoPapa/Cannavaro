@@ -1,14 +1,29 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: react-frontend
+    command: ["npm", "run", "build"]
+    volumes:
+      - frontend-build:/app/dist
+
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: flask-backend
     ports:
-      - "7001:7001"
+      - "7000:7000"
     volumes:
-      - ~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro 
-      - ./backend:/app  #DEVELOPMENT
+      - frontend-build:/app/static  # Mount the built frontend into Flask
+      - ~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro
+      - ./backend:/app  # for development
     environment:
-      - MONGO_URI=mongodb://mongo:27017/cannavaro_db 
+      - MONGO_URI=mongodb://mongo:27017/cannavaro_db
+    depends_on:
+      - mongo
+      - frontend
 
   mongo:
     image: mongo:5.0
@@ -18,17 +33,6 @@ services:
     volumes:
       - mongo-data:/data/db
 
-  # Uncomment the following lines to enable the frontend service in docker (otherwise, run it separately)
-  
-  # frontend:
-  #   build: ./frontend
-  #   container_name: react-frontend
-  #   ports:
-  #     - "7000:7000"
-  #   depends_on:
-  #     - backend
-  #   environment:
-  #     - VITE_API_PROXY=http://backend:7001
-
 volumes:
   mongo-data:
+  frontend-build:

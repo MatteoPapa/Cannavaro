@@ -22,7 +22,9 @@ function ServicePage() {
 
   const refetchPatches = useCallback(async () => {
     if (!service?.name) return;
-    const updated = await fetch(`/api/patches/${service.name}`).then((r) => r.json());
+    const updated = await fetch(`/api/patches/${service.name}`).then((r) =>
+      r.json()
+    );
     setPatches(updated);
   }, [service?.name]);
 
@@ -81,7 +83,9 @@ function ServicePage() {
   };
 
   if (!service) {
-    return <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>;
+    return (
+      <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>
+    );
   }
 
   return (
@@ -138,8 +142,14 @@ function ServicePage() {
             },
           }}
         >
-          {patches.map((patch) => (
-            <PatchCard key={patch.id} patch={patch} refetch={refetchPatches} />
+          {patches.map((patch, index) => (
+            <PatchCard
+              key={patch.id}
+              patch={patch}
+              refetch={refetchPatches}
+              isFirst={index === 0}
+              isConfirmed={patch.status === "confirmed"}
+            />
           ))}
         </Box>
       )}

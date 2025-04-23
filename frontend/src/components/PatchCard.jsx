@@ -12,7 +12,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import { useState } from "react";
 import ConfirmDialog from "./ConfirmDialog";
 
-export default function PatchCard({ patch, refetch }) {
+export default function PatchCard({ patch, refetch, isFirst, isConfirmed }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [actionType, setActionType] = useState(null); // 'delete' or 'confirm'
 
@@ -95,22 +95,27 @@ export default function PatchCard({ patch, refetch }) {
             </Box>
 
             <Box display="flex" gap={1}>
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                onClick={() => handleAction("delete")}
-              >
-                DELETE
-              </Button>
-              <Button
-                size="small"
-                variant="contained"
-                color="success"
-                onClick={() => handleAction("confirm")}
-              >
-                CONFIRM
-              </Button>
+              {isFirst && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  onClick={() => handleAction("delete")}
+                >
+                  DELETE
+                </Button>
+              )}
+
+              {!isConfirmed && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="success"
+                  onClick={() => handleAction("confirm")}
+                >
+                  CONFIRM
+                </Button>
+              )}
             </Box>
           </Box>
 

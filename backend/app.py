@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_file, request, after_this_request
+from flask import Flask, jsonify, send_file, request, after_this_request, send_from_directory
 from flask_cors import CORS
 import os
 from bson import ObjectId
@@ -200,6 +200,16 @@ def confirm_patch(patch_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        print(f"Serving static file: {path}")
+        return send_from_directory(app.static_folder, path)
+    else:
+        print("Serving index.html")
+        return send_from_directory(app.static_folder, 'index.html')
+    
 # ─── Run Server ────────────────────────────
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=7001, debug=False)
+    app.run(host='0.0.0.0', port=7000, debug=False)
