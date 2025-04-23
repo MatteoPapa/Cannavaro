@@ -21,7 +21,8 @@ It automates tedious tasks, enables easy patching of remote services, and provid
 ---
 
 ## 🚀 Getting Started
-
+Before running Cannavaro, make sure to properly configure the config.yaml file located in the backend/ directory.
+This file contains essential settings for the tool to interact with remote VMs and apply patches correctly.
 You can run **Cannavaro** using Docker Compose. Even easier, just use the provided startup scripts:
 
 - On **Windows**: run `start.bat`
