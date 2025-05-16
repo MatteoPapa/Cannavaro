@@ -26,7 +26,7 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
 
         if not compose_content:
             print(f"⚠️ No compose file found in {folder_name}")
-            services.append({"name": folder_name})
+            services.append({"name": folder_name, "port": "Undefined"})
             continue
 
         try:
@@ -46,11 +46,11 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
                 for port in extracted_ports:
                     services.append({"name": folder_name, "port": port})
             else:
-                services.append({"name": folder_name})
+                services.append({"name": folder_name, "port": "Undefined"})
 
         except Exception as e:
             print(f"⚠️ Failed to parse compose file in {folder_name}: {e}")
-            services.append({"name": folder_name})
+            services.append({"name": folder_name, "port": "Undefined"})
 
     return services
 
