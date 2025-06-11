@@ -1,4 +1,7 @@
-vm_ip: host.docker.internal
-#vm_ip: 127.0.0.1
-vm_password: rootpassword
-ssh_port: 2222 #22 is default
+remote_host: localhost
+remote_port: 2222
+root_user: "root"
+vm_password: "rootpassword"
+root_key_path: "/root/.ssh/id_rsa.pub"
+gituser_name: "cannavaro_user"
+local_private_key_file: "cannavaro_user_key.pem"

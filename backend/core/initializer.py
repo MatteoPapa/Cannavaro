@@ -2,7 +2,7 @@
 
 import yaml
 import os
-from utils.ssh_utils import *
+from backend.utils.ssh_utils import *
 from utils.services_utils import *
 from utils.zip_utils import *
 from utils.db_utils import *
