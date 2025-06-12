@@ -1,8 +1,8 @@
-#remote_host: 172.17.0.1
-remote_host: host.docker.internal
+remote_host: 172.17.0.1
+#remote_host: host.docker.internal
 remote_port: 2222
 root_user: "root"
 vm_password: "rootpassword"
-pub_key_path: "/root/.ssh/id_rsa.pub"
+pub_key_path:
 gituser_name: "gituser"
 local_private_key_file: "git_key.pem"

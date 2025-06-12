@@ -52,6 +52,9 @@ def setup_ssh_authorized_key(ssh, config):
     Uses the given SSH connection (must be authenticated).
     """
     pub_key_path = config.get("pub_key_path", "/root/.ssh/id_rsa.pub")
+    if not pub_key_path:
+        log.info("Skipped adding SSH key to authorized_keys")
+        return False
 
     if not os.path.exists(pub_key_path):
         log.error(f"⚠️ SSH public key not found at path: {pub_key_path}")

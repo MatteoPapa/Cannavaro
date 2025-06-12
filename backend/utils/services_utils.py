@@ -132,8 +132,6 @@ def rolling_restart_docker_service(ssh, container_name, service_path, exclude_co
     - Build all services in the project (non-blocking)
     - Restart each container (excluding locked ones), one at a time
     """
-    import logging
-    log = logging.getLogger(__name__)
 
     log.info("Rolling restart: %s (path: %s)", container_name, service_path)
     exclude_containers = set(exclude_containers or [])

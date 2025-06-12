@@ -122,6 +122,7 @@ def initialize_service_repo(ssh, config, root_dir, svc_name):
 
         # Set bare repo as remote origin in the working repo
         run_remote_command(ssh, f"cd {service_path} && git remote add origin {bare_path}")
+        run_remote_command(ssh, f"cd {service_path} && git config receive.denyCurrentBranch updateInstead")
 
         # Check if repo has any commits
         has_commits = run_remote_command(ssh, f"cd {service_path} && git rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no").strip()

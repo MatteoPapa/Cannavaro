@@ -22,12 +22,6 @@ import LockOutlineIcon from "@mui/icons-material/LockOutline";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
 import Tooltip from '@mui/material/Tooltip';
 
-function copyGitClone(service, vmIp) {
-  const { showAlert } = useAlert();
-  navigator.clipboard.writeText(`git clone git@${vmIp}:/root/${service.name}`)
-  showAlert("Git command copied successfully", "success");
-}
-
 function ServicePage() {
   const { name } = useParams();
   const { showAlert } = useAlert();
@@ -81,6 +75,11 @@ function ServicePage() {
     } catch (err) {
       showAlert("Error updating lock state: " + err.message, "error");
     }
+  };
+
+  const copyGitClone = async (service, vmIp) => {
+    await navigator.clipboard.writeText(`GIT_SSH_COMMAND='ssh -i ./git_key.pem' git clone git@${vmIp}:/root/${service}`)
+    showAlert("Git command copied successfully", "success");
   };
 
   const handleResetDocker = async () => {
@@ -155,7 +154,7 @@ function ServicePage() {
 
           <Button variant="outlined" onClick={() => copyGitClone(service.name, vmIp)}>
             <GitLogo size={25} mr={4} />
-            Copy Git Clone Remote
+            Copy Git Clone Command
           </Button>
         </Box>
       </Box>

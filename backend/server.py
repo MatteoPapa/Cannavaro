@@ -154,7 +154,9 @@ def reset_docker():
     log.info(f"Resetting Docker for parent service: {parent} at path {service_path}")
     failed, restarted = [], []
 
-    for svc in subservices:
+    for svc_obj in subservices:
+        svc = svc_obj['name']
+
         if svc in locked:
             continue
 
