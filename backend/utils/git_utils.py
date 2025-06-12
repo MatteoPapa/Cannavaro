@@ -81,52 +81,58 @@ def setup_git_user(ssh, config):
 
     log.info("✅ Git user setup complete.")
 
-def initialize_git_repo(ssh, config):
-    """
-    Initializes a Git repository in /root if one doesn't exist.
-    Sets shared group access, permissions, and makes an initial commit if needed.
-    """
+def initialize_service_repo(ssh, config, service_path):
     user = config["gituser_name"]
 
     try:
-        log.info("📁 Checking if /root is already a Git repository...")
-        is_git_repo = run_remote_command(ssh, "test -d /root/.git && echo exists || echo missing").strip()
+        log.info(f"📁 Checking if {service_path} is already a Git repository...")
+        is_git_repo = run_remote_command(ssh, f"test -d {service_path}/.git && echo exists || echo missing").strip()
 
         if is_git_repo == "missing":
-            log.info("🧱 Initializing Git repository at /root...")
-            run_remote_command(ssh, "git init /root")
+            log.info(f"🧱 Initializing Git repository in {service_path}...")
+            run_remote_command(ssh, f"git init --bare {service_path}")
 
         # Configure shared repo access
-        shared_mode = run_remote_command(ssh, "git -C /root config --get core.sharedRepository || echo none").strip()
+        shared_mode = run_remote_command(ssh, f"git -C {service_path} config --get core.sharedRepository || echo none").strip()
         if shared_mode != "group":
             log.info("🔧 Configuring Git shared group access...")
-            run_remote_command(ssh, "git -C /root config core.sharedRepository group")
+            run_remote_command(ssh, f"git -C {service_path} config core.sharedRepository group")
         else:
             log.info("✅ Git already configured for shared group access.")
 
         # Ensure Git can update when pushed to
-        run_remote_command(ssh, "git -C /root config receive.denyCurrentBranch updateInstead")
+        run_remote_command(ssh, f"git -C {service_path} config receive.denyCurrentBranch updateInstead")
 
         # Check if repo has any commits
-        has_commits = run_remote_command(ssh, "git -C /root rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no").strip()
+        has_commits = run_remote_command(ssh, f"git -C {service_path} rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no").strip()
 
         if has_commits == "no":
             log.info("📦 Staging and committing existing files...")
-            run_remote_command(ssh, "git -C /root config user.name 'Root Automation'")
-            run_remote_command(ssh, "git -C /root config user.email 'root@localhost'")
-            run_remote_command(ssh, "git -C /root add .")
-            run_remote_command(ssh, "git -C /root commit -m 'Initial commit: imported services'")
+            run_remote_command(ssh, f"git -C {service_path} config user.name 'Root Automation'")
+            run_remote_command(ssh, f"git -C {service_path} config user.email 'root@localhost'")
+            run_remote_command(ssh, f"git -C {service_path} add .")
+            run_remote_command(ssh, f"git -C {service_path} commit -m 'Import service'")
         else:
             log.info("✅ Initial commit already exists.")
 
         # Git repo ownership adjustments
-        log.info("🔐 Ensuring permission for gituser on /root and .git...")
-        run_remote_command(ssh, f"chown -R root:{user} /root")
-        run_remote_command(ssh, f"chown -R {config['gituser_name']}:{config['gituser_name']} /root/.git")
-        run_remote_command(ssh, "cd /root && git config receive.denyCurrentBranch updateInstead")
-        run_remote_command(ssh, f"chmod -R g+rwX /root")
+        log.info(f"🔐 Ensuring permission for gituser on {service_path} and .git...")
+        run_remote_command(ssh, f"chown -R root:{user} {service_path}")
+        run_remote_command(ssh, f"chown -R {user}:{user} {service_path}/.git")
+        run_remote_command(ssh, f"git -C {service_path} config receive.denyCurrentBranch updateInstead")
+        run_remote_command(ssh, f"chmod -R g+rwX {service_path}")
 
         log.info("✅ Git repository setup complete and ready for collaboration.")
-
     except Exception as e:
         log.error(f"❌ Failed during Git repository setup: {e}")
+
+def initialize_all_repos(ssh, config):
+    """
+    Initializes a Git repository in /root if one doesn't exist.
+    Sets shared group access, permissions, and makes an initial commit if needed.
+    """
+
+    services = config.get("services")
+    for svc in services:
+        service_path = f"/root/{svc['name']}"
+        initialize_service_repo(ssh, config, service_path)

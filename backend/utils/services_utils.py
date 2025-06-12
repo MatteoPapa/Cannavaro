@@ -19,25 +19,29 @@ def initialize_services(ssh, config, services_yaml_path):
     config["services"] = discovered_services
     return discovered_services
 
+def extract_ports(ports):
+    extracted = []
+    for port_mapping in ports:
+        port_str = str(port_mapping).strip()
+        match = re.match(r"(?:[\d\.]+:)?(\d+):\d+", port_str)
+        if match:
+            extracted.append(int(match.group(1)))
+        else:
+            log.warn(f"Failed to extract port from {port_mapping}")
+
+    return extracted
 
 def list_vm_services_with_ports(ssh, root_dir="/root"):
-    stdin, stdout, stderr = ssh.exec_command(f"ls -d {root_dir}/*/")
-    folders = stdout.read().decode().splitlines()
+    stdin, stdout, stderr = ssh.exec_command(
+            f"find {root_dir} -maxdepth 2 -type f \\( -name 'docker-compose.yml' -o -name 'compose.yml' \\)")
 
+    compose_paths = stdout.read().decode().splitlines()
     services = []
 
-    for folder in folders:
-        folder_name = os.path.basename(folder.strip("/"))
-        compose_candidates = ["docker-compose.yml", "compose.yml"]
-
-        compose_content = None
-        for candidate in compose_candidates:
-            compose_path = os.path.join(folder, candidate)
-            stdin, stdout, stderr = ssh.exec_command(f"cat {compose_path}")
-            output = stdout.read()
-            if output:
-                compose_content = output.decode()
-                break
+    for path in compose_paths:
+        folder_name = os.path.basename(os.path.dirname(path))
+        stdin, stdout, stderr = ssh.exec_command(f"cat {path}")
+        compose_content = stdout.read().decode()
 
         service_obj = {"name": folder_name}
 
@@ -48,23 +52,43 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
 
         try:
             compose_data = yaml.safe_load(io.StringIO(compose_content))
-            services_in_compose = compose_data.get("services", {})
-            extracted_ports = []
-            service_names = list(services_in_compose.keys())
 
-            for service_config in services_in_compose.values():
-                ports = service_config.get("ports", [])
-                for port_mapping in ports:
-                    port_str = str(port_mapping).strip()
-                    match = re.match(r"(?:[\d\.]+:)?(\d+):\d+", port_str)
-                    if match:
-                        extracted_ports.append(int(match.group(1)))
+            subservices = []
+            all_ports = []
+            main_service = None
 
-            if extracted_ports:
-                service_obj["port"] = extracted_ports[0]  # Use first exposed port
+            for name, value in compose_data.get("services", {}).items():
+                service = {
+                    'name': name,
+                    'ports': extract_ports(value.get('ports', [])),
+                    'volumes': value.get('volumes', []),
+                    'environment': value.get('environment', []),
+                }
 
-            if service_names:
-                service_obj["services"] = service_names
+                if 'image' in value:
+                    service['image'] = value['image']
+
+                subservices.append(service)
+                all_ports.extend(service['ports'])
+
+                # high chances its the main (?)
+                if not main_service:
+                    if 'build' in value and value['build'] in ['.', './']:
+                        main_service = service
+
+            if main_service and main_service['ports']:
+                the_ports = main_service['ports']
+            else:
+                the_ports = all_ports
+
+            if the_ports:
+                service_obj["port"] = the_ports[0]
+                if len(the_ports) > 1:
+                    log.warn(f"Found more than one port for service {folder_name}!")
+            else:
+                log.error(f"No ports found for service {folder_name}")
+
+            service_obj["services"] = subservices
 
         except Exception as e:
             log.error(f"⚠️ Failed to parse compose file in {folder_name}: {e}")
@@ -78,11 +102,26 @@ def save_services_to_yaml(services, path):
     for s in services:
         entry = {
             "name": s.get("name"),
-            "port": s.get("port") if "port" in s else None
+            "port": s.get("port", None)
         }
+
         if "services" in s:
             entry["services"] = s["services"]
         formatted.append(entry)
 
     with open(path, "w") as f:
         yaml.dump({"services": formatted}, f, sort_keys=False)
+
+def restart_docker_service(ssh, service_name):
+    service_path = f"/root/{service_name}"  # Adjust this path as needed
+    commands = [
+        f"cd {service_path} && docker compose build",
+        f"cd {service_path} && docker compose down && docker compose up -d"
+    ]
+    for cmd in commands:
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        if stdout.channel.recv_exit_status() != 0:
+            error = stderr.read().decode().strip()
+            print(f"[ERROR] Failed to run: {cmd}\n{error}")
+            return {"success": False, "error": error}
+    return {"success": True}

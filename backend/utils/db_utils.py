@@ -21,19 +21,3 @@ def connect_to_mongo(uri=None):
     except Exception as e:
         print(f"❌ Failed to connect to MongoDB: {e}")
         return None, None
-
-from datetime import datetime
-
-def insert_patch(db, service, description):
-    patch = {
-        "service": service,
-        "description": description,
-        "timestamp": datetime.utcnow()
-    }
-    try:
-        result = db.patches.insert_one(patch)
-        print(f"✅ Patch logged with ID: {result.inserted_id}")
-        return result.inserted_id
-    except Exception as e:
-        print(f"❌ Failed to insert patch: {e}")
-        return None

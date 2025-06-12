@@ -4,7 +4,6 @@ import os
 from bson import ObjectId
 from utils.zip_utils import *
 from utils.db_utils import *
-from utils.patch_utils import *
 from utils.services_utils import *
 from utils.logging_utils import log
 
@@ -12,7 +11,6 @@ from utils.logging_utils import log
 # ─── Paths & Constants ─────────────────────
 BASE_DIR = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.yaml')
-SERVICES_YAML_PATH = os.path.join(BASE_DIR, 'services.yaml')
 ZIP_BASE_DIR = os.path.join(BASE_DIR, 'zip')
 STARTUP_ZIP_PATH, CURRENT_ZIP_DIR = setup_zip_dirs(ZIP_BASE_DIR)
 
@@ -39,7 +37,20 @@ def get_vm_ip():
 
 @app.route("/api/services")
 def get_services():
-    return jsonify(config.get("services", "No services configured"))
+    services = config.get("services", None)
+    if not services:
+        return jsonify({"error": "No services configured"}), 400
+
+    name = request.args.get("name")
+    if not name:
+        return jsonify(services)
+
+    match = next((s for s in services if s["name"] == name), None)
+    if match:
+        return jsonify(match)
+
+    return jsonify({"error": "Service not found", "available": [s['name'] for s in services]}), 400
+
 
 @app.route("/api/service_locks")
 def get_service_locks():
@@ -111,7 +122,7 @@ def get_current_zip():
         return send_file(stored_path, as_attachment=True)
 
     except Exception as e:
-        log.error(f"Error creating current zip: {e}")   
+        log.error(f"Error creating current zip: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -144,6 +155,8 @@ def reset_docker():
     failed, restarted = [], []
 
     for svc in subservices:
+        svc = svc['name']
+
         if svc in locked:
             continue
 
@@ -174,9 +187,8 @@ def serve_react(path):
     else:
         log.info("Serving index.html")
         return send_from_directory(app.static_folder, 'index.html')
-    
+
 def run_server():
-    initialize_services(ssh, config, SERVICES_YAML_PATH)
     app.run(host='0.0.0.0', port=7000, debug=False)
 
 if __name__ == "__main__":
