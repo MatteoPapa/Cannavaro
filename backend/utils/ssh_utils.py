@@ -46,45 +46,45 @@ def ensure_remote_dependencies(ssh):
     except Exception as e:
         log.error(f"❌ Failed to install dependencies: {e}")
 
-def setup_ssh_authorized_key(config):
-    vm_ip = config.get("remote_host")
-    ssh_port = config.get("remote_port", 22)
-    password = config.get("vm_password")
-
+def setup_ssh_authorized_key(ssh, config):
+    """
+    Ensures the current public key is present in the remote VM's ~/.ssh/authorized_keys.
+    Uses the given SSH connection (must be authenticated).
+    """
     pub_key_path = config.get("pub_key_path", "/root/.ssh/id_rsa.pub")
+
     if not os.path.exists(pub_key_path):
-        log.error("⚠️ SSH public key not found inside container:", pub_key_path)
-        return None
+        log.error(f"⚠️ SSH public key not found at path: {pub_key_path}")
+        return False
 
     with open(pub_key_path, 'r') as key_file:
         pub_key = key_file.read().strip()
 
     try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(vm_ip, port=ssh_port, username='root', password=password)
+        log.info("🔐 Setting up authorized_keys on remote VM...")
 
-        # Setup ~/.ssh and authorized_keys
+        # Ensure .ssh folder and authorized_keys file
         ssh.exec_command('mkdir -p ~/.ssh && chmod 700 ~/.ssh')
         ssh.exec_command('touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys')
 
-        # Avoid duplicates
+        # Avoid duplicates before appending key
         check_and_add_cmd = f'grep -qxF "{pub_key}" ~/.ssh/authorized_keys || echo "{pub_key}" >> ~/.ssh/authorized_keys'
-        _, stdout, stderr = ssh.exec_command(check_and_add_cmd)
+        stdin, stdout, stderr = ssh.exec_command(check_and_add_cmd)
 
         out = stdout.read().decode().strip()
         err = stderr.read().decode().strip()
-        if out:
-            log.info("STDOUT:", out)
-        if err:
-            log.warning("STDERR:", err)
 
-        log.info("✅ Public key successfully ensured on VM.")
-        return ssh 
+        if out:
+            log.info(f"STDOUT: {out}")
+        if err:
+            log.warning(f"STDERR: {err}")
+
+        log.info("✅ Public key ensured on VM.")
+        return True
 
     except Exception as e:
-        log.error(f"❌ Failed to add public key to VM: {e}")
-        return None
+        log.error(f"❌ Failed to setup authorized key: {type(e).__name__}: {e}")
+        return False
 
 def run_remote_command(ssh, command, raise_on_error=False):
     stdin, stdout, stderr = ssh.exec_command(command)

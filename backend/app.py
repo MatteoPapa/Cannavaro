@@ -1,5 +1,5 @@
 import yaml, os
-from utils.ssh_utils import ssh_connect, ensure_remote_dependencies
+from utils.ssh_utils import ssh_connect, ensure_remote_dependencies, setup_ssh_authorized_key
 from utils.git_utils import setup_git_user, initialize_all_repos
 from utils.services_utils import initialize_services
 from server import set_dependencies, run_server
@@ -18,7 +18,9 @@ def main():
     ssh = ssh_connect(config)
     if not ssh:
         exit(1)
+    
     ensure_remote_dependencies(ssh)
+    setup_ssh_authorized_key(ssh, config)
     # -----------------------------
 
     # --- Parse services ----------

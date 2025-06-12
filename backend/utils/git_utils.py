@@ -121,6 +121,9 @@ def initialize_service_repo(ssh, config, service_path):
         run_remote_command(ssh, f"chown -R {user}:{user} {service_path}/.git")
         run_remote_command(ssh, f"git -C {service_path} config receive.denyCurrentBranch updateInstead")
         run_remote_command(ssh, f"chmod -R g+rwX {service_path}")
+        
+        # Mark this repo as safe to suppress Git security warnings
+        run_remote_command(ssh, f"git config --global --add safe.directory {service_path}")
 
         log.info("✅ Git repository setup complete and ready for collaboration.")
     except Exception as e:

@@ -155,8 +155,6 @@ def reset_docker():
     failed, restarted = [], []
 
     for svc in subservices:
-        svc = svc['name']
-
         if svc in locked:
             continue
 
@@ -176,7 +174,6 @@ def reset_docker():
         "message": "Unlocked services restarted successfully.",
         "restarted": restarted
     }), 200
-
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

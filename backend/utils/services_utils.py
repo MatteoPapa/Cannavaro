@@ -125,3 +125,54 @@ def restart_docker_service(ssh, service_name):
             print(f"[ERROR] Failed to run: {cmd}\n{error}")
             return {"success": False, "error": error}
     return {"success": True}
+
+def rolling_restart_docker_service(ssh, container_name, service_path, exclude_containers=None):
+    """
+    Perform a rolling restart:
+    - Build all services in the project (non-blocking)
+    - Restart each container (excluding locked ones), one at a time
+    """
+    import logging
+    log = logging.getLogger(__name__)
+
+    log.info("Rolling restart: %s (path: %s)", container_name, service_path)
+    exclude_containers = set(exclude_containers or [])
+
+    # 1. Get list of services
+    list_cmd = f"cd {service_path} && docker compose config --services"
+    stdin, stdout, stderr = ssh.exec_command(list_cmd)
+    services = stdout.read().decode().splitlines()
+    if stdout.channel.recv_exit_status() != 0:
+        error = stderr.read().decode().strip()
+        log.error("[ERROR] Failed to list services: %s", error)
+        return {"success": False, "error": error}
+
+    restart_targets = [s for s in services if s not in exclude_containers]
+    if not restart_targets:
+        return {"success": True, "message": "No services to restart (all excluded)."}
+    log.info("Services to restart: %s", restart_targets)
+    # 2. Build everything up-front
+    build_cmd = f"cd {service_path} && docker compose build {' '.join(restart_targets)}"
+    log.info("Building: %s", build_cmd)
+    stdin, stdout, stderr = ssh.exec_command(build_cmd)
+    if stdout.channel.recv_exit_status() != 0:
+        error = stderr.read().decode().strip()
+        log.error("[ERROR] Build failed:\n%s", error)
+        return {"success": False, "error": error}
+
+    # 3. Restart each service one-by-one
+    failed = {}
+    for svc in restart_targets:
+        restart_cmd = f"cd {service_path} && docker compose up -d --no-deps --force-recreate {svc}"
+        log.info("Restarting service: %s", svc)
+        stdin, stdout, stderr = ssh.exec_command(restart_cmd)
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0:
+            failed[svc] = stderr.read().decode().strip()
+
+    if failed:
+        for svc, msg in failed.items():
+            log.error("[ERROR] Restart failed for %s: %s", svc, msg)
+        return {"success": False, "error": failed}
+
+    return {"success": True, "restarted": restart_targets}
