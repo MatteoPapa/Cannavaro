@@ -4,6 +4,8 @@ from pathlib import Path
 from utils.logging_utils import log
 from utils.ssh_utils import run_remote_command
 
+DEFAULT_BRANCH = "master"
+
 def remote_file_exists(ssh, path):
     """Check if a file exists on the remote system."""
     cmd = f"test -f {path} && echo exists || echo missing"
@@ -47,16 +49,12 @@ def setup_git_user(ssh, config):
 
     # 3. Download private key if not already downloaded
     try:
-        log.info("📥 Checking if local private key exists...")
-        if not Path(local_key_path).exists():
-            log.info("📩 Downloading private key to local machine...")
-            sftp = ssh.open_sftp()
-            Path(local_key_path).parent.mkdir(parents=True, exist_ok=True)
-            sftp.get(remote_key_path, local_key_path)
-            os.chmod(local_key_path, stat.S_IRUSR | stat.S_IWUSR)
-            sftp.close()
-        else:
-            log.info("✅ Local private key already exists.")
+        log.info("📩 Downloading private key to local machine...")
+        sftp = ssh.open_sftp()
+        Path(local_key_path).parent.mkdir(parents=True, exist_ok=True)
+        sftp.get(remote_key_path, local_key_path)
+        os.chmod(local_key_path, stat.S_IRUSR | stat.S_IWUSR)
+        sftp.close()
     except Exception as e:
         log.error(f"❌ Failed to fetch private key: {e}")
         return
@@ -79,57 +77,75 @@ def setup_git_user(ssh, config):
         log.error(f"❌ Failed to assign permissions to /root: {e}")
         return
 
+    # 6. Set Git user name and email
+    try:
+        log.info(f"🛠 Setting Git identity for 'root'...")
+        run_remote_command(ssh, "git config --global user.name \"Root User\"")
+        run_remote_command(ssh, "git config --global user.email \"root@localhost\"")
+        run_remote_command(ssh, f"git config --global init.defaultBranch \"{DEFAULT_BRANCH}\"")
+    except Exception as e:
+        log.error(f"❌ Failed to set Git identity for '{user}': {e}")
+        return
+
     log.info("✅ Git user setup complete.")
 
-def initialize_service_repo(ssh, config, service_path):
+def initialize_service_repo(ssh, config, root_dir, svc_name):
     user = config["gituser_name"]
+    service_path = f"/root/{svc_name}"
+    bare_path = service_path + ".git"
 
     try:
+        log.info(f"📁 Checking if {bare_path} is already a bare Git repository...")
+        is_git_repo = run_remote_command(ssh, f"test -d {bare_path} && echo exists || echo missing").strip()
+
+        if is_git_repo == "missing":
+            log.info(f"🧱 Initializing Git bare repository in {bare_path}...")
+            run_remote_command(ssh, f"git init --bare --shared=group {bare_path}")
+            run_remote_command(ssh, f"chown -R root:{user} {bare_path}")
+            run_remote_command(ssh, f"chmod -R g+rwX {bare_path}")
+
         log.info(f"📁 Checking if {service_path} is already a Git repository...")
         is_git_repo = run_remote_command(ssh, f"test -d {service_path}/.git && echo exists || echo missing").strip()
 
         if is_git_repo == "missing":
             log.info(f"🧱 Initializing Git repository in {service_path}...")
-            run_remote_command(ssh, f"git init --bare {service_path}")
+            run_remote_command(ssh, f"git init {service_path}")
+            run_remote_command(ssh, f"chown -R root:{user} {service_path}")
+            run_remote_command(ssh, f"chown -R {user}:{user} {service_path}/.git")
+            run_remote_command(ssh, f"chmod -R g+rwX {service_path}")
 
-        # Configure shared repo access
-        shared_mode = run_remote_command(ssh, f"git -C {service_path} config --get core.sharedRepository || echo none").strip()
-        if shared_mode != "group":
-            log.info("🔧 Configuring Git shared group access...")
-            run_remote_command(ssh, f"git -C {service_path} config core.sharedRepository group")
-        else:
-            log.info("✅ Git already configured for shared group access.")
+        # Fix dubious ownership
+        run_remote_command(ssh, f"runuser -u {user} -- git config --global --add safe.directory {bare_path}")
+        run_remote_command(ssh, f"git config --global --add safe.directory {bare_path}")
+        run_remote_command(ssh, f"runuser -u {user} -- git config --global --add safe.directory {service_path}")
+        run_remote_command(ssh, f"git config --global --add safe.directory {service_path}")
 
-        # Ensure Git can update when pushed to
-        run_remote_command(ssh, f"git -C {service_path} config receive.denyCurrentBranch updateInstead")
+        # Set bare repo as remote origin in the working repo
+        run_remote_command(ssh, f"cd {service_path} && git remote add origin {bare_path}")
 
         # Check if repo has any commits
-        has_commits = run_remote_command(ssh, f"git -C {service_path} rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no").strip()
-
+        has_commits = run_remote_command(ssh, f"cd {service_path} && git rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no").strip()
         if has_commits == "no":
             log.info("📦 Staging and committing existing files...")
-            run_remote_command(ssh, f"git -C {service_path} config user.name 'Root Automation'")
-            run_remote_command(ssh, f"git -C {service_path} config user.email 'root@localhost'")
-            run_remote_command(ssh, f"git -C {service_path} add .")
-            run_remote_command(ssh, f"git -C {service_path} commit -m 'Import service'")
+            run_remote_command(ssh, f"cd {service_path} && git add .")
+            run_remote_command(ssh, f"cd {service_path} && git commit -m 'Import service {svc_name}'")
         else:
             log.info("✅ Initial commit already exists.")
 
-        # Git repo ownership adjustments
-        log.info(f"🔐 Ensuring permission for gituser on {service_path} and .git...")
-        run_remote_command(ssh, f"chown -R root:{user} {service_path}")
-        run_remote_command(ssh, f"chown -R {user}:{user} {service_path}/.git")
-        run_remote_command(ssh, f"git -C {service_path} config receive.denyCurrentBranch updateInstead")
-        run_remote_command(ssh, f"chmod -R g+rwX {service_path}")
-        
-        # Mark this repo as safe to suppress Git security warnings
-        run_remote_command(ssh, f"git config --global --add safe.directory {service_path}")
+        # Push commits
+        run_remote_command(ssh, f"cd {service_path} && git push origin {DEFAULT_BRANCH}")
+
+        # Write the push hook
+        hook_path = f"{bare_path}/hooks/post-receive"
+        run_remote_command(ssh, f'echo "#!/bin/sh" > {hook_path}')
+        run_remote_command(ssh, f'echo \'GIT_WORK_TREE="{service_path}" git checkout -f\' >> {hook_path}')
+        run_remote_command(ssh, f"chmod +x {hook_path}")
 
         log.info("✅ Git repository setup complete and ready for collaboration.")
     except Exception as e:
         log.error(f"❌ Failed during Git repository setup: {e}")
 
-def initialize_all_repos(ssh, config):
+def initialize_all_repos(ssh, config, root_dir="/root"):
     """
     Initializes a Git repository in /root if one doesn't exist.
     Sets shared group access, permissions, and makes an initial commit if needed.
@@ -137,5 +153,4 @@ def initialize_all_repos(ssh, config):
 
     services = config.get("services")
     for svc in services:
-        service_path = f"/root/{svc['name']}"
-        initialize_service_repo(ssh, config, service_path)
+        initialize_service_repo(ssh, config, root_dir, svc['name'])
