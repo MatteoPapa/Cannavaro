@@ -10,4 +10,4 @@ COPY . .
 EXPOSE 7000
 
 CMD ["python3", "app.py"]
-# CMD ["tail", "-f", "/dev/null"] # Uncomment for debugging purposes
+# CMD ["tail", "-f", "/dev/null"]

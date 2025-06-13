@@ -1,4 +1,7 @@
-vm_ip: host.docker.internal
-#vm_ip: 127.0.0.1
+gituser_name: gituser
+local_private_key_file: git_key.pem
+pub_key_path: /home/.ssh/id_rsa.pub
+remote_host: host.docker.internal
+remote_port: 2222
+root_user: root
 vm_password: rootpassword
-ssh_port: 2222 #22 is default

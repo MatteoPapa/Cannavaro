@@ -6,12 +6,10 @@ import {
   Card,
   CardContent,
   Typography,
-  Chip,
-  Button,
+  Chip
 } from "@mui/material";
 import { Memory } from "@mui/icons-material";
 import ComputerIcon from "@mui/icons-material/Computer";
-import DownloadIcon from "@mui/icons-material/Download";
 import DownloadButtons from "../components/DownloadButtons";
 
 function Home() {

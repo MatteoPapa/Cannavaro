@@ -1,94 +1,89 @@
 import { Link, useParams } from "react-router-dom";
-import { useEffect, useState, useRef, useCallback } from "react";
-import { Container, Typography, Box, Button } from "@mui/material";
+import { useEffect, useState } from "react";
+import {
+  Container,
+  Typography,
+  Box,
+  Button,
+  Stack,
+  Card,
+  CardContent,
+  Divider,
+} from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import HistoryIcon from "@mui/icons-material/History";
 import { useAlert } from "../context/AlertContext";
-import PatchCard from "../components/PatchCard";
-import UploadPatchDialog from "../components/UploadPatchDialog";
 import ServiceHeader from "../components/ServiceHeader";
-import DropZone from "../components/DropZone";
-import FileUploadIcon from "@mui/icons-material/FileUpload";
 import RestartingDocker from "../assets/RestartingDocker";
 import DockerLogo from "../assets/DockerLogo";
+import GitLogo from "../assets/GitLogo";
+import ElectricalServicesIcon from "@mui/icons-material/ElectricalServices";
+import IconButton from "@mui/material/IconButton";
+import LockOutlineIcon from "@mui/icons-material/LockOutline";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
+import Tooltip from "@mui/material/Tooltip";
+import { Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 function ServicePage() {
   const { name } = useParams();
   const { showAlert } = useAlert();
   const [service, setService] = useState(null);
-  const [patches, setPatches] = useState([]);
-  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [description, setDescription] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
   const [restartingDocker, setRestartingDocker] = useState(false);
-
-  const fileInputRef = useRef();
-
-  const refetchPatches = useCallback(async () => {
-    if (!service?.name) return;
-    const updated = await fetch(`/api/patches/${service.name}`).then((r) =>
-      r.json()
-    );
-    setPatches(updated);
-  }, [service?.name]);
+  const [lockedServices, setLockedServices] = useState(new Set());
+  const [vmIp, setVmIp] = useState("");
 
   useEffect(() => {
-    fetch("/api/services")
+    if (!name) return;
+
+    // Fetch service details
+    fetch(`/api/services?name=${name}`)
       .then((res) => res.json())
-      .then((services) => {
-        const found = services.find((s) => s.name === name);
-        setService(found);
+      .then((service) => {
+        setService(service);
+      });
+
+    // Fetch locked services
+    fetch(`/api/service_locks?parent=${name}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setLockedServices(new Set(data.locked || []));
+      });
+
+    fetch("/api/vm_ip")
+      .then((res) => res.json())
+      .then((data) => {
+        setVmIp(data);
       });
   }, [name]);
 
-  useEffect(() => {
-    if (service) {
-      refetchPatches();
-    }
-  }, [service, refetchPatches]);
-
-  const handleUploadClick = () => {
-    document.activeElement?.blur(); // fix potential aria-hidden focus bug
-    fileInputRef.current.click();
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setSelectedFile(file);
-      setUploadDialogOpen(true);
-      e.target.value = ""; // allow re-selecting same file
-    }
-  };
-
-  const handleUpload = async () => {
-    if (!selectedFile || !description) return;
-
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-    formData.append("description", description);
-    formData.append("service", service.name);
+  const handleLockToggle = async (serviceName) => {
+    const isLocked = lockedServices.has(serviceName);
+    const newLocked = new Set(lockedServices);
+    isLocked ? newLocked.delete(serviceName) : newLocked.add(serviceName);
+    setLockedServices(newLocked);
 
     try {
-      setUploadDialogOpen(false); // Close dialog
-      setRestartingDocker(true); // Show "restarting docker..."
-
-      const res = await fetch("/api/upload_patch", {
+      const res = await fetch("/api/service_locks", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parent: name,
+          service: serviceName,
+          lock: !isLocked,
+        }),
       });
-
-      if (!res.ok) throw new Error("Upload failed");
-
-      await refetchPatches();
-      setDescription("");
-      setSelectedFile(null);
+      const data = await res.json();
+      setLockedServices(new Set(data.locked || []));
     } catch (err) {
-      showAlert("Error uploading patch: " + err.message, "error");
-    } finally {
-      setRestartingDocker(false); // Clear message whether success or error
+      showAlert("Error updating lock state: " + err.message, "error");
     }
+  };
+
+  const copyGitClone = async (service, vmIp) => {
+    await navigator.clipboard.writeText(
+      `GIT_SSH_COMMAND='ssh -i ./git_key.pem' git clone gituser@${vmIp}:/root/${service}`
+    );
+    showAlert("Git command copied successfully", "success");
   };
 
   const handleResetDocker = async () => {
@@ -96,12 +91,16 @@ function ServicePage() {
     try {
       const res = await fetch("/api/reset_docker", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ service: service.name }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service: service.name,
+        }),
       });
-      if (!res.ok) throw new Error("Docker reset failed");
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Unknown error");
+      }
 
       showAlert("Docker reset successfully", "success");
     } catch (err) {
@@ -119,108 +118,166 @@ function ServicePage() {
 
   return (
     <Container display="flex" maxWidth="md">
-      <Box sx={{ display: "flex", justifyContent: "center", position: "absolute" }} mb={2}>
-        <Button component={Link} to="/" color="action" sx={{ mb: 2, ":hover":{
-          backgroundColor: "action.hover", color: "text.primary"
-        } }}>
-          <ArrowBackIcon sx={{ mr: 1}} fontSize="large"/>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          position: "absolute",
+        }}
+        mb={2}
+      >
+        <Button
+          component={Link}
+          to="/"
+          color="action"
+          sx={{
+            mb: 2,
+            ":hover": {
+              backgroundColor: "action.hover",
+              color: "text.primary",
+            },
+          }}
+        >
+          <ArrowBackIcon sx={{ mr: 1 }} fontSize="large" />
           Back
         </Button>
       </Box>
 
       <ServiceHeader service={service} />
-      {restartingDocker ? (
-        <RestartingDocker />
-      ) : (
-        <>
-          <Box display={"flex"} justifyContent="center" gap={2}>
-            <Button
-              variant="outlined"
-              onClick={handleResetDocker}
-            >
-              <DockerLogo size={25} mr={4} />
-              Restart Docker
-            </Button>
 
-            <Button
-              variant="outlined"
-              color="secondary"
-              onClick={handleUploadClick}
-            >
-              <FileUploadIcon sx={{ mr: 1 }} />
-              Upload Patch
-            </Button>
-          </Box>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            onChange={handleFileChange}
-          />
-          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-            <DropZone
-              onFileDrop={(file) => {
-                setSelectedFile(file);
-                setUploadDialogOpen(true);
-              }}
-              isDragging={isDragging}
-              setIsDragging={setIsDragging}
-            />
-          </Box>
-          <Typography variant="h5" sx={{ mt: 3, mb: 3 }} color="text.primary">
-            <HistoryIcon
-              sx={{ verticalAlign: "middle", mr: 1 }}
-              color="primary"
-            />
-            Patch History
-          </Typography>
-          {patches.length === 0 ? (
-            <Typography variant="h5" sx={{ mt: 5 }} color="text.secondary">
-              No patches found.
-            </Typography>
+      <Box display={"flex"} justifyContent="center">
+        <Box
+          display={"flex"}
+          width="fit-content"
+          justifyContent="center"
+          flexDirection="column"
+          gap={2}
+        >
+          {restartingDocker ? (
+            <RestartingDocker />
           ) : (
-            <Box
-              sx={{
-                position: "relative",
-                pl: 3,
-                "&::before": {
-                  content: '""',
-                  position: "absolute",
-                  top: 0,
-                  left: 15,
-                  width: "2px",
-                  height: "100%",
-                  bgcolor: "primary.main",
-                },
-              }}
-            >
-              {patches.map((patch, index) => (
-                <PatchCard
-                  key={patch.id}
-                  patch={patch}
-                  refetch={refetchPatches}
-                  isFirst={index === 0}
-                  isConfirmed={patch.status === "confirmed"}
-                  setRestartingDocker={setRestartingDocker}
-                />
-              ))}
-            </Box>
+            <Button variant="outlined" onClick={handleResetDocker}>
+              <DockerLogo size={25} mr={4} />
+              Restart Full Docker
+            </Button>
           )}
-        </>
-      )}
 
-      <UploadPatchDialog
-        open={uploadDialogOpen}
-        onClose={() => {
-          setUploadDialogOpen(false);
-          setSelectedFile(null);
-          document.activeElement?.blur(); // optional: help with a11y
-        }}
-        onUpload={handleUpload}
-        description={description}
-        setDescription={setDescription}
-      />
+          <Button
+            variant="outlined"
+            color="success"
+            onClick={() => copyGitClone(service.name, vmIp)}
+          >
+            <GitLogo size={20} mr={5} />
+            Copy Git Clone Command
+          </Button>
+        </Box>
+      </Box>
+
+      <Typography
+        variant="h6"
+        align="center"
+        sx={{ mt: 4, fontWeight: 600, letterSpacing: 1 }}
+      >
+        All Services:
+      </Typography>
+      <Stack spacing={2} width="100%" alignItems="center" mt={2}>
+        {service.services.map((service) => (
+          <Card
+            key={service.name}
+            variant="outlined"
+            sx={{
+              width: "100%",
+              maxWidth: 500,
+              textDecoration: "none",
+              bgcolor: "background.paper",
+              color: "text.primary",
+              transition: "0.3s",
+              borderRadius: 2,
+              p: 2,
+              "&:hover": {
+                boxShadow: 6,
+              },
+            }}
+          >
+            <CardContent>
+              <Box
+                display="flex"
+                alignItems="center"
+                justifyContent="space-between"
+                mb={1}
+              >
+                {/* Left side: icon + name */}
+                <Box display="flex" alignItems="center" gap={1}>
+                  <ElectricalServicesIcon fontSize="medium" color="primary" />
+                  <Typography variant="h6">
+                    {service.name.charAt(0).toUpperCase() +
+                      service.name.slice(1)}
+                  </Typography>
+                </Box>
+
+                {/* Right side: Lock icon */}
+                <Box mr={2}>
+                  <IconButton onClick={() => handleLockToggle(service.name)}>
+                    {lockedServices.has(service.name) ? (
+                      <Tooltip title="The service will not be restarted">
+                        <LockOutlineIcon
+                          fontSize={"large"}
+                          sx={{ color: "red" }}
+                        />
+                      </Tooltip>
+                    ) : (
+                      <Tooltip title="The service will be restarted">
+                        <LockOpenIcon fontSize={"large"} />
+                      </Tooltip>
+                    )}
+                  </IconButton>
+                </Box>
+              </Box>
+              {/* Show environment */}
+              {service.environment && service.environment.length > 0 && (
+                <Accordion sx={{ mt: 2 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Environment Variables</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {service.environment.map((env, i) => (
+                      <Box key={i} sx={{ m: 1 }} display="flex" flexDirection="column" gap={1}>
+                        {i !== 0 && (
+                          <Divider/>
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                          {env}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Show volumes */}
+              {service.volumes && service.volumes.length > 0 && (
+                <Accordion sx={{ mt: 2 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Mounted Volumes</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {service.volumes.map((vol, i) => (
+                      <Box key={i} sx={{ m: 1 }} display="flex" flexDirection="column" gap={1}>
+                        {i !== 0 && (
+                          <Divider/>
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                          {vol}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </AccordionDetails>
+                </Accordion>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </Stack>
     </Container>
   );
 }
