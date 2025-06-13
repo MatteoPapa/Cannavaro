@@ -9,5 +9,5 @@ COPY . .
 
 EXPOSE 7000
 
-# CMD ["python3", "app.py"]
-CMD ["tail", "-f", "/dev/null"]
+CMD ["python3", "app.py"]
+# CMD ["tail", "-f", "/dev/null"]

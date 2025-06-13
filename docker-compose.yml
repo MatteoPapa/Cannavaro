@@ -19,20 +19,8 @@ services:
       - frontend-build:/app/static
       - ~/.ssh/id_rsa.pub:/root/.ssh/id_rsa.pub:ro
       - ./backend:/app
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/cannavaro_db
     depends_on:
-      - mongo
       - frontend  # default depends on frontend
 
-  mongo:
-    image: mongo:5.0
-    container_name: mongo-db
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-
 volumes:
-  mongo-data:
   frontend-build:

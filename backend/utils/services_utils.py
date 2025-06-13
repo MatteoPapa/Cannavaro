@@ -63,6 +63,7 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
                     'ports': extract_ports(value.get('ports', [])),
                     'volumes': value.get('volumes', []),
                     'environment': value.get('environment', []),
+                    'locked': False,
                 }
 
                 if 'image' in value:
@@ -126,41 +127,28 @@ def restart_docker_service(ssh, service_name):
             return {"success": False, "error": error}
     return {"success": True}
 
-def rolling_restart_docker_service(ssh, container_name, service_path, exclude_containers=None):
+def rolling_restart_docker_service(ssh, service_path, to_restart):
     """
-    Perform a rolling restart:
-    - Build all services in the project (non-blocking)
-    - Restart each container (excluding locked ones), one at a time
+    Perform a rolling restart of specified services:
+    - Build the listed services
+    - Restart each one individually
     """
+    log.info("Rolling restart for: %s", to_restart)
+    if not to_restart:
+        return {"success": True, "message": "No services to restart."}
 
-    log.info("Rolling restart: %s (path: %s)", container_name, service_path)
-    exclude_containers = set(exclude_containers or [])
-
-    # 1. Get list of services
-    list_cmd = f"cd {service_path} && docker compose config --services"
-    stdin, stdout, stderr = ssh.exec_command(list_cmd)
-    services = stdout.read().decode().splitlines()
-    if stdout.channel.recv_exit_status() != 0:
-        error = stderr.read().decode().strip()
-        log.error("[ERROR] Failed to list services: %s", error)
-        return {"success": False, "error": error}
-
-    restart_targets = [s for s in services if s not in exclude_containers]
-    if not restart_targets:
-        return {"success": True, "message": "No services to restart (all excluded)."}
-    log.info("Services to restart: %s", restart_targets)
-    # 2. Build everything up-front
-    build_cmd = f"cd {service_path} && docker compose build {' '.join(restart_targets)}"
-    log.info("Building: %s", build_cmd)
+    # 1. Build specified services
+    build_cmd = f"cd {service_path} && docker compose build {' '.join(to_restart)}"
+    log.info("Building services: %s", build_cmd)
     stdin, stdout, stderr = ssh.exec_command(build_cmd)
     if stdout.channel.recv_exit_status() != 0:
         error = stderr.read().decode().strip()
         log.error("[ERROR] Build failed:\n%s", error)
         return {"success": False, "error": error}
 
-    # 3. Restart each service one-by-one
+    # 2. Restart each service individually
     failed = {}
-    for svc in restart_targets:
+    for svc in to_restart:
         restart_cmd = f"cd {service_path} && docker compose up -d --no-deps --force-recreate {svc}"
         log.info("Restarting service: %s", svc)
         stdin, stdout, stderr = ssh.exec_command(restart_cmd)
@@ -173,4 +161,5 @@ def rolling_restart_docker_service(ssh, container_name, service_path, exclude_co
             log.error("[ERROR] Restart failed for %s: %s", svc, msg)
         return {"success": False, "error": failed}
 
-    return {"success": True, "restarted": restart_targets}
+    return {"success": True, "restarted": to_restart}
+

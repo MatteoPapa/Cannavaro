@@ -3,6 +3,7 @@ from utils.ssh_utils import ssh_connect, ensure_remote_dependencies, setup_ssh_a
 from utils.git_utils import setup_git_user, initialize_all_repos
 from utils.services_utils import initialize_services
 from server import set_dependencies, run_server
+import atexit
 
 BASE_DIR = os.path.dirname(__file__)
 SERVICES_YAML_PATH = os.path.join(BASE_DIR, 'services.yaml')
@@ -10,6 +11,10 @@ SERVICES_YAML_PATH = os.path.join(BASE_DIR, 'services.yaml')
 def load_config():
     with open("config.yaml", "r") as f:
         return yaml.safe_load(f)
+    
+def save_config(config):
+    with open("config.yaml", "w") as f:
+        yaml.safe_dump(config, f)
 
 def main():
     config = load_config()
@@ -34,8 +39,8 @@ def main():
     # ---- Run Web Server -----------
     set_dependencies(config, ssh)
     run_server()
-
-
+    
+    save_config(config)
     ssh.close()
 
 if __name__ == "__main__":
