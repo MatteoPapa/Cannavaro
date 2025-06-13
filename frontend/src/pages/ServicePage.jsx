@@ -218,6 +218,51 @@ function ServicePage() {
                   </IconButton>
                 </Box>
               </Box>
+              {/* Show environment */}
+              {service.environment && service.environment.length > 0 ? (
+                <details>
+                  <summary style={{ cursor: 'pointer', fontWeight: 'bold', marginBottom: 8 }}>
+                    Environment Variables
+                  </summary>
+                  {service.environment.map((env, i) => (
+                      <Typography
+                        variant="body2"
+                        key={i}
+                        color="text.secondary"
+                        sx={{ pl: 2, mb: 0.5 }}
+                      >
+                        {env}
+                      </Typography>
+                    ))}
+                </details>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No environment discovered.
+                </Typography>
+              )}
+
+              {/* Show volumes */}
+              {service.volumes && service.volumes.length > 0 ? (
+                <details>
+                  <summary style={{ cursor: 'pointer', fontWeight: 'bold', marginBottom: 8 }}>
+                    Mounted volumes
+                  </summary>
+                  {service.volumes.map((env, i) => (
+                      <Typography
+                        variant="body2"
+                        key={i}
+                        color="text.secondary"
+                        sx={{ pl: 2, mb: 0.5 }}
+                      >
+                        {env}
+                      </Typography>
+                    ))}
+                </details>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No volumes discovered.
+                </Typography>
+              )}
             </CardContent>
           </Card>
         ))}
