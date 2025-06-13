@@ -13,6 +13,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useAlert } from "../context/AlertContext";
 import ServiceHeader from "../components/ServiceHeader";
+import DetailsMenu from "../components/DetailsMenu";
 import RestartingDocker from "../assets/RestartingDocker";
 import DockerLogo from "../assets/DockerLogo";
 import GitLogo from "../assets/GitLogo";
@@ -233,47 +234,11 @@ function ServicePage() {
                   </IconButton>
                 </Box>
               </Box>
-              {/* Show environment */}
-              {service.environment && service.environment.length > 0 && (
-                <Accordion sx={{ mt: 2 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography>Environment Variables</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    {service.environment.map((env, i) => (
-                      <Box key={i} sx={{ m: 1 }} display="flex" flexDirection="column" gap={1}>
-                        {i !== 0 && (
-                          <Divider/>
-                        )}
-                        <Typography variant="body2" color="text.secondary">
-                          {env}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </AccordionDetails>
-                </Accordion>
-              )}
 
-              {/* Show volumes */}
-              {service.volumes && service.volumes.length > 0 && (
-                <Accordion sx={{ mt: 2 }}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography>Mounted Volumes</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    {service.volumes.map((vol, i) => (
-                      <Box key={i} sx={{ m: 1 }} display="flex" flexDirection="column" gap={1}>
-                        {i !== 0 && (
-                          <Divider/>
-                        )}
-                        <Typography variant="body2" color="text.secondary">
-                          {vol}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </AccordionDetails>
-                </Accordion>
-              )}
+              {/* Show detailed info */}
+              <DetailsMenu name="Environment" list={service.environment} />
+              <DetailsMenu name="Mounted Volumes" list={service.volumes} />
+              <DetailsMenu name="Exposed Ports" list={service.ports} />
             </CardContent>
           </Card>
         ))}
