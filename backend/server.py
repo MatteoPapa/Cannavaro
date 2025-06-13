@@ -128,7 +128,6 @@ def get_current_zip():
 
         # Ensure target folder exists
         os.makedirs(CURRENT_ZIP_DIR, exist_ok=True)
-
         os.rename(temp_zip_path, stored_path)
 
         @after_this_request
@@ -144,6 +143,14 @@ def get_current_zip():
     except Exception as e:
         log.error(f"Error creating current zip: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route("/api/get_git_key")
+def get_git_key():
+    git_key_path = config.get("local_private_key_file")
+    if not git_key_path or not os.path.exists(git_key_path):
+        return jsonify({"error": "Git key not configured or file not found"}), 404
+
+    return send_file(git_key_path, as_attachment=True)
 
 @app.route("/api/reset_docker", methods=["POST"])
 def reset_docker():

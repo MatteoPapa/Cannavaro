@@ -7,14 +7,15 @@ import atexit
 
 BASE_DIR = os.path.dirname(__file__)
 SERVICES_YAML_PATH = os.path.join(BASE_DIR, 'services.yaml')
+CONFIG_YAML_PATH = os.path.join(BASE_DIR, 'config.yaml')
 
 def load_config():
-    with open("config.yaml", "r") as f:
+    with open(CONFIG_YAML_PATH, "r") as f:
         return yaml.safe_load(f)
     
 def save_config(config):
-    with open("config.yaml", "w") as f:
-        yaml.safe_dump(config, f)
+    with open(SERVICES_YAML_PATH, "w") as f:
+        yaml.safe_dump(config['services'], f)
 
 def main():
     config = load_config()
