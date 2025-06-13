@@ -8,17 +8,21 @@ import {
   Stack,
   Card,
   CardContent,
-  Chip,
+  Divider,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useAlert } from "../context/AlertContext";
 import ServiceHeader from "../components/ServiceHeader";
 import RestartingDocker from "../assets/RestartingDocker";
 import DockerLogo from "../assets/DockerLogo";
+import GitLogo from "../assets/GitLogo";
 import ElectricalServicesIcon from "@mui/icons-material/ElectricalServices";
 import IconButton from "@mui/material/IconButton";
 import LockOutlineIcon from "@mui/icons-material/LockOutline";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
+import Tooltip from "@mui/material/Tooltip";
+import { Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 function ServicePage() {
   const { name } = useParams();
@@ -26,16 +30,16 @@ function ServicePage() {
   const [service, setService] = useState(null);
   const [restartingDocker, setRestartingDocker] = useState(false);
   const [lockedServices, setLockedServices] = useState(new Set());
+  const [vmIp, setVmIp] = useState("");
 
   useEffect(() => {
     if (!name) return;
 
     // Fetch service details
-    fetch("/api/services")
+    fetch(`/api/services?name=${name}`)
       .then((res) => res.json())
-      .then((services) => {
-        const found = services.find((s) => s.name === name);
-        setService(found);
+      .then((service) => {
+        setService(service);
       });
 
     // Fetch locked services
@@ -43,6 +47,12 @@ function ServicePage() {
       .then((res) => res.json())
       .then((data) => {
         setLockedServices(new Set(data.locked || []));
+      });
+
+    fetch("/api/vm_ip")
+      .then((res) => res.json())
+      .then((data) => {
+        setVmIp(data);
       });
   }, [name]);
 
@@ -67,6 +77,13 @@ function ServicePage() {
     } catch (err) {
       showAlert("Error updating lock state: " + err.message, "error");
     }
+  };
+
+  const copyGitClone = async (service, vmIp) => {
+    await navigator.clipboard.writeText(
+      `GIT_SSH_COMMAND='ssh -i ./git_key.pem' git clone gituser@${vmIp}:/root/${service}`
+    );
+    showAlert("Git command copied successfully", "success");
   };
 
   const handleResetDocker = async () => {
@@ -128,16 +145,34 @@ function ServicePage() {
 
       <ServiceHeader service={service} />
 
-      {restartingDocker ? (
-        <RestartingDocker />
-      ) : (
-        <Box display={"flex"} justifyContent="center" gap={2}>
-          <Button variant="outlined" onClick={handleResetDocker}>
-            <DockerLogo size={25} mr={4} />
-            Restart Full Docker
+      <Box display={"flex"} justifyContent="center">
+        <Box
+          display={"flex"}
+          width="fit-content"
+          justifyContent="center"
+          flexDirection="column"
+          gap={2}
+        >
+          {restartingDocker ? (
+            <RestartingDocker />
+          ) : (
+            <Button variant="outlined" onClick={handleResetDocker}>
+              <DockerLogo size={25} mr={4} />
+              Restart Full Docker
+            </Button>
+          )}
+
+          <Button
+            variant="outlined"
+            color="success"
+            onClick={() => copyGitClone(service.name, vmIp)}
+          >
+            <GitLogo size={20} mr={5} />
+            Copy Git Clone Command
           </Button>
         </Box>
-      )}
+      </Box>
+
       <Typography
         variant="h6"
         align="center"
@@ -148,7 +183,7 @@ function ServicePage() {
       <Stack spacing={2} width="100%" alignItems="center" mt={2}>
         {service.services.map((service) => (
           <Card
-            key={service}
+            key={service.name}
             variant="outlined"
             sx={{
               width: "100%",
@@ -175,24 +210,70 @@ function ServicePage() {
                 <Box display="flex" alignItems="center" gap={1}>
                   <ElectricalServicesIcon fontSize="medium" color="primary" />
                   <Typography variant="h6">
-                    {service.charAt(0).toUpperCase() + service.slice(1)}
+                    {service.name.charAt(0).toUpperCase() +
+                      service.name.slice(1)}
                   </Typography>
                 </Box>
 
                 {/* Right side: Lock icon */}
                 <Box mr={2}>
-                  <IconButton onClick={() => handleLockToggle(service)}>
-                    {lockedServices.has(service) ? (
-                      <LockOutlineIcon
-                        fontSize={"large"}
-                        sx={{ color: "red" }}
-                      />
+                  <IconButton onClick={() => handleLockToggle(service.name)}>
+                    {lockedServices.has(service.name) ? (
+                      <Tooltip title="The service will not be restarted">
+                        <LockOutlineIcon
+                          fontSize={"large"}
+                          sx={{ color: "red" }}
+                        />
+                      </Tooltip>
                     ) : (
-                      <LockOpenIcon fontSize={"large"} />
+                      <Tooltip title="The service will be restarted">
+                        <LockOpenIcon fontSize={"large"} />
+                      </Tooltip>
                     )}
                   </IconButton>
                 </Box>
               </Box>
+              {/* Show environment */}
+              {service.environment && service.environment.length > 0 && (
+                <Accordion sx={{ mt: 2 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Environment Variables</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {service.environment.map((env, i) => (
+                      <Box key={i} sx={{ m: 1 }} display="flex" flexDirection="column" gap={1}>
+                        {i !== 0 && (
+                          <Divider/>
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                          {env}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </AccordionDetails>
+                </Accordion>
+              )}
+
+              {/* Show volumes */}
+              {service.volumes && service.volumes.length > 0 && (
+                <Accordion sx={{ mt: 2 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Mounted Volumes</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {service.volumes.map((vol, i) => (
+                      <Box key={i} sx={{ m: 1 }} display="flex" flexDirection="column" gap={1}>
+                        {i !== 0 && (
+                          <Divider/>
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                          {vol}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </AccordionDetails>
+                </Accordion>
+              )}
             </CardContent>
           </Card>
         ))}

@@ -3,8 +3,6 @@ from flask_cors import CORS
 import os
 from bson import ObjectId
 from utils.zip_utils import *
-from utils.db_utils import *
-from utils.patch_utils import *
 from utils.services_utils import *
 from utils.logging_utils import log
 
@@ -12,7 +10,6 @@ from utils.logging_utils import log
 # ─── Paths & Constants ─────────────────────
 BASE_DIR = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.yaml')
-SERVICES_YAML_PATH = os.path.join(BASE_DIR, 'services.yaml')
 ZIP_BASE_DIR = os.path.join(BASE_DIR, 'zip')
 STARTUP_ZIP_PATH, CURRENT_ZIP_DIR = setup_zip_dirs(ZIP_BASE_DIR)
 
@@ -29,9 +26,6 @@ def set_dependencies(ext_config, ext_ssh):
     config = ext_config
     ssh = ext_ssh
 
-# ─── Init Database ─────────────────────────
-mongo_client, db = connect_to_mongo()
-
 # ─── API Routes ────────────────────────────
 @app.route("/api/vm_ip")
 def get_vm_ip():
@@ -39,42 +33,79 @@ def get_vm_ip():
 
 @app.route("/api/services")
 def get_services():
-    return jsonify(config.get("services", "No services configured"))
+    services = config.get("services", None)
+    if not services:
+        return jsonify({"error": "No services configured"}), 400
+
+    name = request.args.get("name")
+    if not name:
+        return jsonify(services)
+
+    match = next((s for s in services if s["name"] == name), None)
+    if match:
+        return jsonify(match)
+
+    return jsonify({"error": "Service not found", "available": [s['name'] for s in services]}), 400
+
+YAML_FILE = "services.yaml"
 
 @app.route("/api/service_locks")
 def get_service_locks():
     parent = request.args.get("parent")
     if not parent:
         return jsonify({"error": "Missing 'parent' query param"}), 400
-    doc = db.service_locks.find_one({"parent": parent})
-    locked = doc.get("locked", []) if doc else []
-    return jsonify({"locked": locked})
+
+    # Load YAML
+    with open(YAML_FILE, "r") as f:
+        services = yaml.safe_load(f)
+
+    locked_services = []
+    for group in services.get("services", []):
+        if group["name"] == parent:
+            for subservice in group.get("services", []):
+                if subservice.get("locked"):
+                    locked_services.append(subservice["name"])
+            break
+
+    return jsonify({"locked": locked_services})
 
 @app.route("/api/service_locks", methods=["POST"])
 def update_service_locks():
     data = request.get_json()
     parent = data.get("parent")
-    service = data.get("service")
-    lock = data.get("lock")  # true to lock, false to unlock
+    service_name = data.get("service")
+    lock = data.get("lock")
 
-    if not parent or not service:
+    if not parent or not service_name:
         return jsonify({"error": "Missing 'parent' or 'service' in body"}), 400
 
-    doc = db.service_locks.find_one({"parent": parent}) or {"parent": parent, "locked": []}
-    locked = set(doc.get("locked", []))
+    services = config.get("services")
+    if not services:
+        return jsonify({"error": "No services configured"}), 400
 
-    if lock:
-        locked.add(service)
-    else:
-        locked.discard(service)
+    updated = False
+    for service in services:
+        if service["name"] == parent:
+            for subservice in service.get("services", []):
+                if subservice["name"] == service_name:
+                    subservice["locked"] = bool(lock)
+                    updated = True
+                    break
+            break  # parent found, no need to keep looping
 
-    db.service_locks.update_one(
-        {"parent": parent},
-        {"$set": {"locked": list(locked)}},
-        upsert=True
-    )
-    return jsonify({"locked": list(locked)})
+    if not updated:
+        return jsonify({"error": "Service not found"}), 404
 
+    # Return currently locked services for this parent
+    locked = [
+        s["name"]
+        for g in services
+        if g["name"] == parent
+        for s in g.get("services", [])
+        if s.get("locked") is True
+    ]
+
+    return jsonify({"locked": locked})
 
 @app.route("/api/get_startup_zip")
 def get_startup_zip():
@@ -97,7 +128,6 @@ def get_current_zip():
 
         # Ensure target folder exists
         os.makedirs(CURRENT_ZIP_DIR, exist_ok=True)
-
         os.rename(temp_zip_path, stored_path)
 
         @after_this_request
@@ -111,47 +141,56 @@ def get_current_zip():
         return send_file(stored_path, as_attachment=True)
 
     except Exception as e:
-        log.error(f"Error creating current zip: {e}")   
+        log.error(f"Error creating current zip: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/get_git_key")
+def get_git_key():
+    git_key_path = config.get("local_private_key_file")
+    if not git_key_path or not os.path.exists(git_key_path):
+        return jsonify({"error": "Git key not configured or file not found"}), 404
+
+    return send_file(git_key_path, as_attachment=True)
 
 @app.route("/api/reset_docker", methods=["POST"])
 def reset_docker():
-    """
-    POST body:
-        {
-          "service": "parent-stack-name"
-        }
-    """
+    # 1. Get service name (parent) from request body
     data = request.get_json(silent=True) or {}
     parent = data.get("service")
 
     if not parent:
         return jsonify({"error": "Missing 'service' in request"}), 400
-
-    # Get the parent entry
-    parent_entry = next((s for s in config["services"] if s["name"] == parent), None)
+    
+    # 2. Locate the parent entry
+    parent_entry = next((s for s in config.get("services", []) if s["name"] == parent), None)
     if not parent_entry:
         return jsonify({"error": f"Parent service '{parent}' not found in config"}), 404
 
     subservices = parent_entry.get("services", [])
 
-    # 2. Get locked services from DB
-    lock_doc = db.service_locks.find_one({"parent": parent}) or {}
-    locked = set(lock_doc.get("locked", []))
     service_path = f"/root/{parent}"
     log.info(f"Resetting Docker for parent service: {parent} at path {service_path}")
+
     failed, restarted = [], []
-
-    for svc in subservices:
-        if svc in locked:
-            continue
-
-        result = rolling_restart_docker_service(ssh, svc, service_path)
-        if result.get("success"):
-            restarted.extend(result.get("restarted", []))
+    to_restart = []
+    has_locked = False
+    for svc_obj in subservices:
+        svc = svc_obj['name']
+        if svc_obj.get("locked"):
+            log.info(f"Skipping locked service: {svc}")
+            has_locked = True
         else:
-            failed.append({"service": svc, "error": result.get("error")})
+            to_restart.append(svc)
+
+    if not has_locked:
+        result = restart_docker_service(ssh, parent) # Common docker restart
+    else:
+        result = rolling_restart_docker_service(ssh, service_path, to_restart) # Rolling restart
+
+    if result.get("success"):
+        restarted.extend(result.get("restarted", []))
+    else:
+        failed.append({"service": svc, "error": result.get("error")})
 
     if failed:
         return jsonify({
@@ -160,10 +199,8 @@ def reset_docker():
         }), 500
 
     return jsonify({
-        "message": "Unlocked services restarted successfully.",
-        "restarted": restarted
+        "message": "Unlocked services restarted successfully."
     }), 200
-
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -174,9 +211,8 @@ def serve_react(path):
     else:
         log.info("Serving index.html")
         return send_from_directory(app.static_folder, 'index.html')
-    
+
 def run_server():
-    initialize_services(ssh, config, SERVICES_YAML_PATH)
     app.run(host='0.0.0.0', port=7000, debug=False)
 
 if __name__ == "__main__":
