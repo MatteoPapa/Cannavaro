@@ -8,7 +8,7 @@ import {
   Stack,
   Card,
   CardContent,
-  Chip,
+  Divider,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { useAlert } from "../context/AlertContext";
@@ -20,7 +20,9 @@ import ElectricalServicesIcon from "@mui/icons-material/ElectricalServices";
 import IconButton from "@mui/material/IconButton";
 import LockOutlineIcon from "@mui/icons-material/LockOutline";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
-import Tooltip from '@mui/material/Tooltip';
+import Tooltip from "@mui/material/Tooltip";
+import { Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 function ServicePage() {
   const { name } = useParams();
@@ -78,7 +80,9 @@ function ServicePage() {
   };
 
   const copyGitClone = async (service, vmIp) => {
-    await navigator.clipboard.writeText(`GIT_SSH_COMMAND='ssh -i ./git_key.pem' git clone git@${vmIp}:/root/${service}`)
+    await navigator.clipboard.writeText(
+      `GIT_SSH_COMMAND='ssh -i ./git_key.pem' git clone gituser@${vmIp}:/root/${service}`
+    );
     showAlert("Git command copied successfully", "success");
   };
 
@@ -142,7 +146,13 @@ function ServicePage() {
       <ServiceHeader service={service} />
 
       <Box display={"flex"} justifyContent="center">
-        <Box display={"flex"} width="fit-content" justifyContent="center" flexDirection="column" gap={2}>
+        <Box
+          display={"flex"}
+          width="fit-content"
+          justifyContent="center"
+          flexDirection="column"
+          gap={2}
+        >
           {restartingDocker ? (
             <RestartingDocker />
           ) : (
@@ -152,8 +162,12 @@ function ServicePage() {
             </Button>
           )}
 
-          <Button variant="outlined" onClick={() => copyGitClone(service.name, vmIp)}>
-            <GitLogo size={25} mr={4} />
+          <Button
+            variant="outlined"
+            color="success"
+            onClick={() => copyGitClone(service.name, vmIp)}
+          >
+            <GitLogo size={20} mr={5} />
             Copy Git Clone Command
           </Button>
         </Box>
@@ -196,7 +210,8 @@ function ServicePage() {
                 <Box display="flex" alignItems="center" gap={1}>
                   <ElectricalServicesIcon fontSize="medium" color="primary" />
                   <Typography variant="h6">
-                    {service.name.charAt(0).toUpperCase() + service.name.slice(1)}
+                    {service.name.charAt(0).toUpperCase() +
+                      service.name.slice(1)}
                   </Typography>
                 </Box>
 
@@ -219,49 +234,45 @@ function ServicePage() {
                 </Box>
               </Box>
               {/* Show environment */}
-              {service.environment && service.environment.length > 0 ? (
-                <details>
-                  <summary style={{ cursor: 'pointer', fontWeight: 'bold', marginBottom: 8 }}>
-                    Environment Variables
-                  </summary>
-                  {service.environment.map((env, i) => (
-                      <Typography
-                        variant="body2"
-                        key={i}
-                        color="text.secondary"
-                        sx={{ pl: 2, mb: 0.5 }}
-                      >
-                        {env}
-                      </Typography>
+              {service.environment && service.environment.length > 0 && (
+                <Accordion sx={{ mt: 2 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Environment Variables</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {service.environment.map((env, i) => (
+                      <Box key={i} sx={{ m: 1 }} display="flex" flexDirection="column" gap={1}>
+                        {i !== 0 && (
+                          <Divider/>
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                          {env}
+                        </Typography>
+                      </Box>
                     ))}
-                </details>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No environment discovered.
-                </Typography>
+                  </AccordionDetails>
+                </Accordion>
               )}
 
               {/* Show volumes */}
-              {service.volumes && service.volumes.length > 0 ? (
-                <details>
-                  <summary style={{ cursor: 'pointer', fontWeight: 'bold', marginBottom: 8 }}>
-                    Mounted volumes
-                  </summary>
-                  {service.volumes.map((env, i) => (
-                      <Typography
-                        variant="body2"
-                        key={i}
-                        color="text.secondary"
-                        sx={{ pl: 2, mb: 0.5 }}
-                      >
-                        {env}
-                      </Typography>
+              {service.volumes && service.volumes.length > 0 && (
+                <Accordion sx={{ mt: 2 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography>Mounted Volumes</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {service.volumes.map((vol, i) => (
+                      <Box key={i} sx={{ m: 1 }} display="flex" flexDirection="column" gap={1}>
+                        {i !== 0 && (
+                          <Divider/>
+                        )}
+                        <Typography variant="body2" color="text.secondary">
+                          {vol}
+                        </Typography>
+                      </Box>
                     ))}
-                </details>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  No volumes discovered.
-                </Typography>
+                  </AccordionDetails>
+                </Accordion>
               )}
             </CardContent>
           </Card>
