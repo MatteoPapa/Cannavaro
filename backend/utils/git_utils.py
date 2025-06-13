@@ -89,8 +89,8 @@ def setup_git_user(ssh, config):
 
     log.info("✅ Git user setup complete.")
 
-def initialize_service_repo(ssh, config, root_dir, svc_name):
-    user = config["gituser_name"]
+def initialize_service_repo(ssh, root_dir, svc, user):
+    svc_name = svc['name']
     service_path = f"/root/{svc_name}"
     bare_path = service_path + ".git"
 
@@ -124,6 +124,15 @@ def initialize_service_repo(ssh, config, root_dir, svc_name):
         run_remote_command(ssh, f"cd {service_path} && git remote add origin {bare_path}")
         run_remote_command(ssh, f"cd {service_path} && git config receive.denyCurrentBranch updateInstead")
 
+        log.info(f"Creating .gitignore for service {svc_name}")
+        run_remote_command(ssh, f"echo '' > {service_path}/.gitignore")
+
+        for subsvc in svc['services']:
+            for volume in subsvc.get('volumes', []):
+                path = volume.split(":", 1)[0]
+                run_remote_command(ssh, f"echo '{path}' >> {service_path}/.gitignore")
+                log.info(f"Ignoring volume {path} for service {svc_name}")
+
         # Check if repo has any commits
         has_commits = run_remote_command(ssh, f"cd {service_path} && git rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no").strip()
         if has_commits == "no":
@@ -153,5 +162,7 @@ def initialize_all_repos(ssh, config, root_dir="/root"):
     """
 
     services = config.get("services")
+    user = config["gituser_name"]
+
     for svc in services:
-        initialize_service_repo(ssh, config, root_dir, svc['name'])
+        initialize_service_repo(ssh, root_dir, svc, user)
