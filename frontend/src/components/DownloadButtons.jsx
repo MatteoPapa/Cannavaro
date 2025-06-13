@@ -1,7 +1,6 @@
 import React from "react";
 import { Button, Box } from "@mui/material";
 import DownloadIcon from "@mui/icons-material/Download";
-import KeyIcon from '@mui/icons-material/Key';
 import { useAlert } from "../context/AlertContext";
 
 export default function DownloadButtons() {
@@ -36,9 +35,7 @@ export default function DownloadButtons() {
         variant="outlined"
         color="primary"
         sx={{ mb: 2 }}
-        onClick={() =>
-          handleDownload("/api/get_startup_zip", "home_backup_startup.zip")
-        }
+        onClick={() => handleDownload("/api/get_startup_zip", "home_backup_startup.zip")}
       >
         <DownloadIcon sx={{ mr: 1 }} />
         Original Zip
@@ -48,30 +45,10 @@ export default function DownloadButtons() {
         variant="outlined"
         color="secondary"
         sx={{ mb: 2 }}
-        onClick={() =>
-          handleDownload(
-            "/api/get_current_zip",
-            `home_backup_${Date.now()}.zip`
-          )
-        }
+        onClick={() => handleDownload("/api/get_current_zip", `home_backup_${Date.now()}.zip`)}
       >
         <DownloadIcon sx={{ mr: 1 }} />
         Current Zip
-      </Button>
-
-      <Button
-        variant="outlined"
-        color="success"
-        sx={{ mb: 2 }}
-        onClick={() =>
-          handleDownload(
-            "/api/get_git_key",
-            `git_key.pem`
-          )
-        }
-      >
-        <KeyIcon sx={{ mr: 1 }} />
-        Git-SSH Key
       </Button>
     </Box>
   );

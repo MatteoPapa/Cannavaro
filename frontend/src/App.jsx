@@ -2,7 +2,7 @@ import './App.css'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Home from './pages/Home'
 import ServicePage from './pages/ServicePage'
-import { AlertProvider } from './context/AlertContext'
+import { AlertProvider } from './context/AlertContext' // 👈 import the provider
 
 function App() {
   return (

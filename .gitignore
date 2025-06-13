@@ -8,4 +8,3 @@ backups
 backend/services.yaml
 remote_vm_example/index.html
 cannavaro_user_key.pem
-git_key.pem

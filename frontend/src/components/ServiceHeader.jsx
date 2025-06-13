@@ -5,7 +5,7 @@ function ServiceHeader({ service}) {
   return (
     <Box display="flex" alignItems="center" justifyContent="center" flexDirection="column" gap={3} sx={{ mb: 3 }}>
       <Typography variant="h3" color="primary">
-        {service.name} <Chip title="Service Port" label={`${service.port}`} variant="outlined" />
+        {service.name} <Chip label={`${service.port}`} variant="outlined" />
       </Typography>
     </Box>
   );
