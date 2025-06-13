@@ -89,80 +89,67 @@ def setup_git_user(ssh, config):
 
     log.info("✅ Git user setup complete.")
 
-def initialize_service_repo(ssh, root_dir, svc, user):
-    svc_name = svc['name']
-    service_path = f"/root/{svc_name}"
-    bare_path = service_path + ".git"
+def initialize_service_repo(ssh, config, path):
+    """
+    Initializes a Git repository in the specified path if one doesn't exist.
+    Sets shared group access, permissions, and makes an initial commit if needed.
+    """
+    user = config["gituser_name"]
 
     try:
-        log.info(f"📁 Checking if {bare_path} is already a bare Git repository...")
-        is_git_repo = run_remote_command(ssh, f"test -d {bare_path} && echo exists || echo missing").strip()
+        log.info(f"📁 Checking if {path} is already a Git repository...")
+        is_git_repo = run_remote_command(ssh, f"test -d {path}/.git && echo exists || echo missing").strip()
 
         if is_git_repo == "missing":
-            log.info(f"🧱 Initializing Git bare repository in {bare_path}...")
-            run_remote_command(ssh, f"git init --bare --shared=group {bare_path}")
-            run_remote_command(ssh, f"chown -R root:{user} {bare_path}")
-            run_remote_command(ssh, f"chmod -R g+rwX {bare_path}")
+            log.info(f"🧱 Initializing Git repository at {path}...")
+            run_remote_command(ssh, f"git init {path}")
 
-        log.info(f"📁 Checking if {service_path} is already a Git repository...")
-        is_git_repo = run_remote_command(ssh, f"test -d {service_path}/.git && echo exists || echo missing").strip()
+        # Configure shared repo access
+        shared_mode = run_remote_command(
+            ssh, f"cd {path} && git config --get core.sharedRepository || echo none"
+        ).strip()
+        if shared_mode != "group":
+            log.info("🔧 Configuring Git shared group access...")
+            run_remote_command(ssh, f"cd {path} && git config core.sharedRepository group")
+        else:
+            log.info("✅ Git already configured for shared group access.")
 
-        if is_git_repo == "missing":
-            log.info(f"🧱 Initializing Git repository in {service_path}...")
-            run_remote_command(ssh, f"git init {service_path}")
-            run_remote_command(ssh, f"chown -R root:{user} {service_path}")
-            run_remote_command(ssh, f"chown -R {user}:{user} {service_path}/.git")
-            run_remote_command(ssh, f"chmod -R g+rwX {service_path}")
-
-        # Fix dubious ownership
-        run_remote_command(ssh, f"runuser -u {user} -- git config --global --add safe.directory {bare_path}")
-        run_remote_command(ssh, f"git config --global --add safe.directory {bare_path}")
-        run_remote_command(ssh, f"runuser -u {user} -- git config --global --add safe.directory {service_path}")
-        run_remote_command(ssh, f"git config --global --add safe.directory {service_path}")
-
-        # Set bare repo as remote origin in the working repo
-        run_remote_command(ssh, f"cd {service_path} && git remote add origin {bare_path}")
-        run_remote_command(ssh, f"cd {service_path} && git config receive.denyCurrentBranch updateInstead")
-
-        log.info(f"Creating .gitignore for service {svc_name}")
-        run_remote_command(ssh, f"echo '' > {service_path}/.gitignore")
-
-        for subsvc in svc['services']:
-            for volume in subsvc.get('volumes', []):
-                path = volume.split(":", 1)[0]
-                run_remote_command(ssh, f"echo '{path}' >> {service_path}/.gitignore")
-                log.info(f"Ignoring volume {path} for service {svc_name}")
+        # Ensure Git can update when pushed to
+        run_remote_command(ssh, f"cd {path} && git config receive.denyCurrentBranch updateInstead")
 
         # Check if repo has any commits
-        has_commits = run_remote_command(ssh, f"cd {service_path} && git rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no").strip()
+        has_commits = run_remote_command(
+            ssh, f"cd {path} && git rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no"
+        ).strip()
+
         if has_commits == "no":
             log.info("📦 Staging and committing existing files...")
-            run_remote_command(ssh, f"cd {service_path} && git add .")
-            run_remote_command(ssh, f"cd {service_path} && git commit -m 'Import service {svc_name}'")
+            run_remote_command(ssh, f"cd {path} && git config user.name 'Root Automation'")
+            run_remote_command(ssh, f"cd {path} && git config user.email 'root@localhost'")
+            run_remote_command(ssh, f"cd {path} && git add .")
+            run_remote_command(ssh, f"cd {path} && git commit -m 'Initial commit: imported services'")
         else:
             log.info("✅ Initial commit already exists.")
 
-        # Push commits
-        run_remote_command(ssh, f"cd {service_path} && git push origin {DEFAULT_BRANCH}")
-
-        # Write the push hook
-        hook_path = f"{bare_path}/hooks/post-receive"
-        run_remote_command(ssh, f'echo "#!/bin/sh" > {hook_path}')
-        run_remote_command(ssh, f'echo \'GIT_WORK_TREE="{service_path}" git checkout -f\' >> {hook_path}')
-        run_remote_command(ssh, f"chmod +x {hook_path}")
+        # Git repo ownership adjustments
+        log.info(f"🔐 Ensuring permission for gituser on {path} and .git...")
+        run_remote_command(ssh, f"chown -R root:{user} {path}")
+        run_remote_command(ssh, f"chown -R {user}:{user} {path}/.git")
+        run_remote_command(ssh, f"chmod -R g+rwX {path}")
 
         log.info("✅ Git repository setup complete and ready for collaboration.")
+
     except Exception as e:
         log.error(f"❌ Failed during Git repository setup: {e}")
 
-def initialize_all_repos(ssh, config, root_dir="/root"):
+def initialize_all_repos(ssh, config):
     """
     Initializes a Git repository in /root if one doesn't exist.
     Sets shared group access, permissions, and makes an initial commit if needed.
     """
 
     services = config.get("services")
-    user = config["gituser_name"]
 
     for svc in services:
-        initialize_service_repo(ssh, root_dir, svc, user)
+        path = "/root/" + svc["name"]
+        initialize_service_repo(ssh, config, path)
