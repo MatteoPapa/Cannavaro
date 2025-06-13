@@ -10,6 +10,12 @@ It automates tedious tasks, enables easy patching of remote services, and provid
 
 ---
 
+<h6 align="center">
+  <img src="https://github.com/user-attachments/assets/d5de1a65-c9ec-4758-9f0f-8c9a1a1bfd09" alt="Cannavaro Screenshot" width="750" />
+</h6>
+
+---
+
 ## 🧠 What It Does
 
 - 🔐 Seamless SSH setup – Automatically configures SSH access to remote virtual machines.

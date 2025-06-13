@@ -88,6 +88,7 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
                     log.warn(f"Found more than one port for service {folder_name}!")
             else:
                 log.error(f"No ports found for service {folder_name}")
+                service_obj["port"] = "Undefined"
 
             service_obj["services"] = subservices
 
