@@ -1,1 +1,0 @@
-docker compose --profile dev-frontend -f docker-compose.yml -f docker-compose.dev.yml up --build
