@@ -151,53 +151,54 @@ def get_git_key():
 
 @app.route("/api/reset_docker", methods=["POST"])
 def reset_docker():
-    # 1. Get service name (parent) from request body
     data = request.get_json(silent=True) or {}
     parent = data.get("service")
+    target_sub = data.get("subservice")  # Optional
 
     if not parent:
         return jsonify({"error": "Missing 'service' in request"}), 400
     
-    # 2. Locate the parent entry
     parent_entry = next((s for s in config.get("services", []) if s["name"] == parent), None)
     if not parent_entry:
         return jsonify({"error": f"Parent service '{parent}' not found in config"}), 404
 
     subservices = parent_entry.get("services", [])
-
     service_path = f"/root/{parent}"
     log.info(f"Resetting Docker for parent service: {parent} at path {service_path}")
 
     failed, restarted = [], []
     to_restart = []
-    has_locked = False
-    for svc_obj in subservices:
-        svc = svc_obj['name']
-        if svc_obj.get("locked"):
-            log.info(f"Skipping locked service: {svc}")
-            has_locked = True
-        else:
-            to_restart.append(svc)
 
-    if not has_locked:
-        result = restart_docker_service(ssh, parent) # Common docker restart
+    if target_sub:
+        target_entry = next((s for s in subservices if s["name"] == target_sub), None)
+        if not target_entry:
+            return jsonify({"error": f"Subservice '{target_sub}' not found under '{parent}'"}), 404
+        if target_entry.get("locked"):
+            return jsonify({"error": f"Subservice '{target_sub}' is locked"}), 403
+        to_restart = [target_sub]
     else:
-        result = rolling_restart_docker_service(ssh, service_path, to_restart) # Rolling restart
+        for svc_obj in subservices:
+            if not svc_obj.get("locked"):
+                to_restart.append(svc_obj['name'])
+
+    if not to_restart:
+        return jsonify({"error": "No services to restart"}), 400
+
+    if not target_sub and all(not s.get("locked") for s in subservices):
+        result = restart_docker_service(ssh, parent)
+    else:
+        result = rolling_restart_docker_service(ssh, service_path, to_restart)
 
     if result.get("success"):
         restarted.extend(result.get("restarted", []))
     else:
-        failed.append({"service": svc, "error": result.get("error")})
+        for svc in to_restart:
+            failed.append({"service": svc, "error": result.get("error")})
 
     if failed:
-        return jsonify({
-            "error": "Some services failed to restart",
-            "details": failed
-        }), 500
+        return jsonify({"error": "Some services failed to restart", "details": failed}), 500
 
-    return jsonify({
-        "message": "Unlocked services restarted successfully."
-    }), 200
+    return jsonify({"message": "Services restarted successfully."}), 200
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

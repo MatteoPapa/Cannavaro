@@ -21,6 +21,7 @@ import ElectricalServicesIcon from "@mui/icons-material/ElectricalServices";
 import IconButton from "@mui/material/IconButton";
 import LockOutlineIcon from "@mui/icons-material/LockOutline";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import Tooltip from "@mui/material/Tooltip";
 import { Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -128,6 +129,32 @@ function ServicePage() {
       setRestartingDocker(false);
     }
   };
+
+  const handleResetSubservice = async (subservice) => {
+    setRestartingDocker(true);
+    try {
+      const res = await fetch("/api/reset_docker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service: name,
+          subservice: subservice,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Unknown error");
+      }
+
+      showAlert(`Subservice ${subservice} restarted`, "success");
+    } catch (err) {
+      showAlert(`Failed to restart ${subservice}: ${err.message}`, "error");
+    } finally {
+      setRestartingDocker(false);
+    }
+  }
 
   if (!service) {
     return (
@@ -249,6 +276,15 @@ function ServicePage() {
                         <LockOpenIcon fontSize={"large"} />
                       </Tooltip>
                     )}
+                  </IconButton>
+                  <IconButton
+                    onClick={() => handleResetSubservice(service.name)}
+                    disabled={lockedServices.has(service.name)}
+                    color =  "primary"
+                  >
+                    <Tooltip title="Restart this subservice only">
+                      <RestartAltIcon fontSize={"large"}/>
+                    </Tooltip>
                   </IconButton>
                 </Box>
               </Box>
