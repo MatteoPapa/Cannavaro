@@ -1,6 +1,4 @@
-gituser_name: gituser
 local_private_key_file: git_key.pem
-pub_key_path: /home/.ssh/id_rsa.pub
 remote_host: host.docker.internal
 remote_port: 2222
 root_user: root

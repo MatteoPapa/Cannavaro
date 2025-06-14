@@ -1,6 +1,6 @@
 import yaml, os
 from utils.ssh_utils import ssh_connect, ensure_remote_dependencies, setup_ssh_authorized_key
-from utils.git_utils import setup_git_user, initialize_all_repos
+from utils.git_utils import setup_ssh_key, initialize_all_repos
 from utils.services_utils import initialize_services
 from server import set_dependencies, run_server
 import atexit
@@ -33,7 +33,7 @@ def main():
     initialize_services(ssh, config, SERVICES_YAML_PATH)
 
     # --- Git Setup ---------------
-    setup_git_user(ssh, config)
+    setup_ssh_key(ssh, config)
     initialize_all_repos(ssh, config)
     # -----------------------------
 

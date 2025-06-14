@@ -51,7 +51,7 @@ def setup_ssh_authorized_key(ssh, config):
     Ensures the current public key is present in the remote VM's ~/.ssh/authorized_keys.
     Uses the given SSH connection (must be authenticated).
     """
-    pub_key_path = config.get("pub_key_path", "/root/.ssh/id_rsa.pub")
+    pub_key_path = "/root/.ssh/id_rsa.pub"
     if not pub_key_path:
         log.info("Skipped adding SSH key to authorized_keys")
         return False
