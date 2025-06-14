@@ -193,6 +193,23 @@ function ServicePage() {
     }
   };
 
+  const handleReloadProxy = async (subservice) => {
+    try {
+      const res = await fetch("/api/reload_proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service: subservice }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Unknown error");
+
+      showAlert(`Proxy for ${subservice} reloaded successfully.`, "success");
+    } catch (err) {
+      showAlert(`Failed to reload proxy: ${err.message}`, "error");
+    }
+  };
+
   if (!service) {
     return (
       <Container display="flex">
@@ -332,6 +349,15 @@ function ServicePage() {
                   >
                     <Tooltip title="Install proxy on this service">
                       <ShieldIcon fontSize={"large"} />
+                    </Tooltip>
+                  </IconButton>
+                  <IconButton
+                    onClick={() => handleReloadProxy(name)} // Here we are sending the main service name
+                    disabled={lockedServices.has(service.name)}
+                    color="success"
+                  >
+                    <Tooltip title="Reload proxy on this service">
+                      <RestartAltIcon fontSize={"small"} />
                     </Tooltip>
                   </IconButton>
                 </Box>

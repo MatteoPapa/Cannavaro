@@ -5,7 +5,7 @@ from bson import ObjectId
 from utils.zip_utils import *
 from utils.services_utils import *
 from utils.logging_utils import log
-from utils.proxy_utils import install_proxy_for_service, is_proxy_installed
+from utils.proxy_utils import install_proxy_for_service, is_proxy_installed, reload_proxy_screen
 
 # ─── Paths & Constants ─────────────────────
 BASE_DIR = os.path.dirname(__file__)
@@ -223,6 +223,20 @@ def install_proxy():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/reload_proxy", methods=["POST"])
+def reload_proxy():
+    data = request.get_json()
+    service = data.get("service")
+
+    if not service:
+        return jsonify({"error": "Missing 'service' in request"}), 400
+
+    try:
+        log.info(f"Reloading proxy for service: {service}")
+        result = reload_proxy_screen(ssh, service)
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to reload proxy: {str(e)}"}), 500
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

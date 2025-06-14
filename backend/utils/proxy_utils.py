@@ -25,7 +25,16 @@ def render_jinja_proxy_script(service_name, from_port, to_port, target_ip, templ
         TO_PORT=to_port,
         TARGET_IP=target_ip
     )
-# ------------------------
+
+def is_proxy_installed(ssh, service_name):
+    """
+    Checks if the proxy file for the given service already exists on the VM.
+    """
+    remote_path = f"/root/proxy_{service_name}.py"
+    stdin, stdout, stderr = ssh.exec_command(f"test -f {remote_path} && echo exists || echo missing")
+    output = stdout.read().decode().strip()
+    return output == "exists"
+
 
 # ----- MAIN FUNCTIONS -----
 def install_proxy_for_service(ssh, config, parent, subservice):
@@ -141,11 +150,18 @@ def install_proxy_for_service(ssh, config, parent, subservice):
         run_remote_command(ssh, f"mv {backup_path} {compose_path}")
         return {"success": False, "error": f"Failed to install proxy: {e}"}
     
-def is_proxy_installed(ssh, service_name):
-    """
-    Checks if the proxy file for the given service already exists on the VM.
-    """
-    remote_path = f"/root/proxy_{service_name}.py"
-    stdin, stdout, stderr = ssh.exec_command(f"test -f {remote_path} && echo exists || echo missing")
-    output = stdout.read().decode().strip()
-    return output == "exists"
+def reload_proxy_screen(ssh, service_name):
+    screen_name = f"proxy_{service_name}"
+    log.info(f"Sending reload signal to proxy screen: {screen_name}")
+    # Check if screen exists
+    check_cmd = f"screen -list | grep {screen_name}"
+
+    output = run_remote_command(ssh, check_cmd).strip()
+    if screen_name not in output:
+        log.error(f"No running screen session found for {screen_name}")
+        return {"success": False, "error": f"No running screen session for {screen_name}"}
+    
+    # Send reload signal
+    cmd = f"screen -S {screen_name} -X stuff 'r\\n'"
+    run_remote_command(ssh, cmd)
+    return {"success": True, "message": f"Reload signal sent to proxy {screen_name}"}
