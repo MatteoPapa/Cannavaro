@@ -50,12 +50,32 @@ def install_proxy_for_service(ssh, config, parent, subservice):
 
         if not ports:
             return {"success": False, "error": f"No ports defined for subservice '{subservice}'"}
-
+        
         updated_ports = []
+
         for port in ports:
-            host, container = port.split(":")
-            host = str(int(host) - 1)  # Decrease host port by 1
-            updated_ports.append(f"{host}:{container}")
+            if isinstance(port, int):  # Rare case: raw number
+                from_port = port - 1
+                updated_ports.append(f"{from_port}:{port}")
+                continue
+
+            parts = port.split(":")
+
+            if len(parts) == 2:
+                # "3000:3000" → host:container
+                host, container = parts
+                from_port = str(int(host) - 1)
+                updated_ports.append(f"{from_port}:{container}")
+
+            elif len(parts) == 3:
+                # "0.0.0.0:3000:3000" → ip:host:container
+                ip, host, container = parts
+                from_port = str(int(host) - 1)
+                updated_ports.append(f"{ip}:{from_port}:{container}")
+
+            else:
+                return {"success": False, "error": f"Unrecognized port format: '{port}'"}
+
 
         service_def["ports"] = updated_ports
 
@@ -73,7 +93,7 @@ def install_proxy_for_service(ssh, config, parent, subservice):
         """)
         
          # Determine FROM and TO port
-        original_port = int(ports[0].split(":")[0])
+        original_port = int(host)
         adjusted_port = original_port - 1
 
         # Determine TARGET_IP from config
@@ -108,6 +128,9 @@ def install_proxy_for_service(ssh, config, parent, subservice):
             os.remove(tmp_path)
 
             log.info(f"✅ Rendered Demon Hill proxy uploaded to {remote_path}")
+            screen_name = (f"proxy_{parent}")
+            start_cmd = f"screen -S {screen_name} -dm bash -c 'python3 {remote_path}'"
+            run_remote_command(ssh, start_cmd)
         except Exception as e:
             return {"success": False, "error": f"Script rendered, but upload failed: {e}"}
 
@@ -117,22 +140,12 @@ def install_proxy_for_service(ssh, config, parent, subservice):
         # Restore backup if anything goes wrong
         run_remote_command(ssh, f"mv {backup_path} {compose_path}")
         return {"success": False, "error": f"Failed to install proxy: {e}"}
-
-def upload_proxy_script(ssh, local_path, service_name):
-    """
-    Uploads the proxy file to the remote VM under /root/{service}_proxy
-    """
-    import posixpath
-
-    remote_path = posixpath.join("/root", f"{service_name}_proxy")
-    try:
-        sftp = ssh.open_sftp()
-        sftp.put(local_path, remote_path)
-        sftp.chmod(remote_path, 0o755)
-        sftp.close()
-        log.info(f"✅ Proxy script uploaded to {remote_path}")
-        return {"success": True}
-    except Exception as e:
-        log.error(f"❌ Failed to upload proxy script: {e}")
-        return {"success": False, "error": str(e)}
     
+def is_proxy_installed(ssh, service_name):
+    """
+    Checks if the proxy file for the given service already exists on the VM.
+    """
+    remote_path = f"/root/proxy_{service_name}.py"
+    stdin, stdout, stderr = ssh.exec_command(f"test -f {remote_path} && echo exists || echo missing")
+    output = stdout.read().decode().strip()
+    return output == "exists"

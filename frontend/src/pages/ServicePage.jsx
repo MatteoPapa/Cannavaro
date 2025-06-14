@@ -24,16 +24,19 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import Tooltip from "@mui/material/Tooltip";
 import ShieldIcon from "@mui/icons-material/Shield";
-import { Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import CircularProgress from "@mui/material/CircularProgress";
+import ConfirmDialog from "../components/ConfirmDialog"; // Adjust path if needed
 
 function ServicePage() {
   const { name } = useParams();
   const { showAlert } = useAlert();
   const [service, setService] = useState(null);
+  const [settingProxy, setSettingProxy] = useState(false);
   const [restartingDocker, setRestartingDocker] = useState(false);
   const [lockedServices, setLockedServices] = useState(new Set());
   const [vmIp, setVmIp] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingSubservice, setPendingSubservice] = useState(null);
 
   useEffect(() => {
     if (!name) return;
@@ -158,32 +161,43 @@ function ServicePage() {
     }
   };
 
-  const handleInstallProxy = async (subservice) => {
-  try {
-    const res = await fetch("/api/install_proxy", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        service: name,
-        subservice: subservice,
-      }),
-    });
+  const triggerInstallProxy = (subservice) => {
+    setConfirmOpen(true);
+    setPendingSubservice(subservice);
+  };
 
-    const data = await res.json();
+  const handleConfirmInstall = async () => {
+    setConfirmOpen(false);
+    if (!pendingSubservice) return;
 
-    if (!res.ok) {
-      throw new Error(data.error || "Unknown error");
+    setSettingProxy(true);
+    try {
+      const res = await fetch("/api/install_proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service: name,
+          subservice: pendingSubservice,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Unknown error");
+
+      showAlert(`Proxy installed for ${pendingSubservice}`, "success");
+    } catch (err) {
+      showAlert(`Failed to install proxy: ${err.message}`, "error");
+    } finally {
+      setSettingProxy(false);
+      setPendingSubservice(null);
     }
-
-    showAlert(`Proxy installed for ${subservice}`, "success");
-  } catch (err) {
-    showAlert(`Failed to install proxy: ${err.message}`, "error");
-  }
-};
+  };
 
   if (!service) {
     return (
-      <Typography sx={{ m: 4 }}>Loading or service not found...</Typography>
+      <Container display="flex">
+        <CircularProgress />
+      </Container>
     );
   }
 
@@ -224,7 +238,7 @@ function ServicePage() {
           flexDirection="column"
           gap={2}
         >
-          {restartingDocker ? (
+          {restartingDocker || settingProxy ? (
             <RestartingDocker />
           ) : (
             <Button variant="outlined" onClick={handleResetDocker}>
@@ -312,8 +326,8 @@ function ServicePage() {
                     </Tooltip>
                   </IconButton>
                   <IconButton
-                    onClick={() => handleInstallProxy(service.name)}
-                    disabled={lockedServices.has(service.name)}
+                    onClick={() => triggerInstallProxy(service.name)}
+                    disabled={lockedServices.has(service.name) || settingProxy}
                     color="secondary"
                   >
                     <Tooltip title="Install proxy on this service">
@@ -331,6 +345,13 @@ function ServicePage() {
           </Card>
         ))}
       </Stack>
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmInstall}
+        title="Install Proxy"
+        description={`Are you sure you want to install a proxy on "${pendingSubservice}"?`}
+      />
     </Container>
   );
 }

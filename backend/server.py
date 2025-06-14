@@ -5,7 +5,7 @@ from bson import ObjectId
 from utils.zip_utils import *
 from utils.services_utils import *
 from utils.logging_utils import log
-from utils.proxy_utils import install_proxy_for_service
+from utils.proxy_utils import install_proxy_for_service, is_proxy_installed
 
 # ─── Paths & Constants ─────────────────────
 BASE_DIR = os.path.dirname(__file__)
@@ -210,6 +210,10 @@ def install_proxy():
         return jsonify({"error": "Missing 'service' or 'subservice' in request"}), 400
 
     try:
+        if is_proxy_installed(ssh, parent):
+            log.info(f"Proxy for {parent} already installed — skipping")
+            return jsonify({"error": "Proxy already installed"}), 400
+        
         log.info(f"Installing proxy for service: {parent}, subservice: {subservice}")
         result = install_proxy_for_service(ssh, config, parent, subservice)
         if result["success"]:
