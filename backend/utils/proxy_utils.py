@@ -4,7 +4,9 @@ import posixpath
 from utils.ssh_utils import run_remote_command
 from utils.services_utils import rolling_restart_docker_service
 from utils.logging_utils import log
+from jinja2 import Template
 
+# ----- HELPER FUNCTIONS -----
 def find_compose_file(ssh, service_path):
     possible_names = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
     for name in possible_names:
@@ -14,7 +16,19 @@ def find_compose_file(ssh, service_path):
             return full_path
     return None
 
-def install_proxy_for_service(ssh, parent, subservice):
+def render_jinja_proxy_script(service_name, from_port, to_port, target_ip, template_path):
+    with open(template_path, "r") as f:
+        template = Template(f.read())
+
+    return template.render(
+        FROM_PORT=from_port,
+        TO_PORT=to_port,
+        TARGET_IP=target_ip
+    )
+# ------------------------
+
+# ----- MAIN FUNCTIONS -----
+def install_proxy_for_service(ssh, config, parent, subservice):
     service_path = f"/root/{parent}"
     compose_path = find_compose_file(ssh, service_path)
 
@@ -57,18 +71,45 @@ def install_proxy_for_service(ssh, parent, subservice):
             git add {os.path.basename(compose_path)} && \
             git commit -m '{commit_msg}'
         """)
+        
+         # Determine FROM and TO port
+        original_port = int(ports[0].split(":")[0])
+        adjusted_port = original_port - 1
 
-        # Upload demon hill proxy script
-        remote_path = posixpath.join("/root", f"{parent}_proxy.py")
-        local_proxy_path = os.path.join(os.path.dirname(__file__), "../assets/demon_hill.py")
+        # Determine TARGET_IP from config
+        remote_host = config.get("remote_host", "")
+        target_ip = remote_host if remote_host == "host.docker.internal" else "127.0.0.1"
+
+        # Render the proxy script
+        local_proxy_template = os.path.join(os.path.dirname(__file__), "../assets/demon_hill_template.py")
+        if not os.path.exists(local_proxy_template):
+            return {"success": False, "error": "Demon Hill proxy template not found."}
+
+        rendered_script = render_jinja_proxy_script(
+            parent,
+            original_port,
+            adjusted_port,
+            target_ip,
+            local_proxy_template
+        )
+
+        # Upload the rendered proxy script
+        remote_path = posixpath.join("/root", f"proxy_{parent}.py")
         try:
+            import tempfile
+            with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
+                tmp.write(rendered_script)
+                tmp_path = tmp.name
+
             sftp = ssh.open_sftp()
-            sftp.put(local_proxy_path, remote_path)
+            sftp.put(tmp_path, remote_path)
             sftp.chmod(remote_path, 0o755)
             sftp.close()
-            log.info(f"✅ Demon Hill proxy script uploaded to {remote_path}")
+            os.remove(tmp_path)
+
+            log.info(f"✅ Rendered Demon Hill proxy uploaded to {remote_path}")
         except Exception as e:
-            return {"success": False, "error": f"Subservice modified, but demon hill proxy script upload failed: {e}"}
+            return {"success": False, "error": f"Script rendered, but upload failed: {e}"}
 
         return rolling_restart_docker_service(ssh, f"/root/{parent}", [subservice])
 
@@ -94,3 +135,4 @@ def upload_proxy_script(ssh, local_path, service_name):
     except Exception as e:
         log.error(f"❌ Failed to upload proxy script: {e}")
         return {"success": False, "error": str(e)}
+    

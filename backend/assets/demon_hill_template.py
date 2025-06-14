@@ -9,8 +9,8 @@ import random, string
 
 LOG_LEVEL = 'info'
 
-FROM_PORT = 1338
-TO_PORT = 1337
+FROM_PORT = {{FROM_PORT}} # type: ignore
+TO_PORT = {{TO_PORT}} # type: ignore
 
 SERVER_HISTORY_SIZE = 1024 * 1024
 CLIENT_HISTORY_SIZE = 1024 * 1024
@@ -38,7 +38,7 @@ if __name__ == '__main__':
 		this.FROM_PORT = int(sys.argv[1])
 		this.TO_PORT = int(sys.argv[2])
 
-	proxy = this.TCPProxy(this.logger, '0.0.0.0', '127.0.0.1', this.FROM_PORT, this.TO_PORT)
+	proxy = this.TCPProxy(this.logger, '0.0.0.0', '{{TARGET_IP}}', this.FROM_PORT, this.TO_PORT)
 	proxy.start()
 
 	reload_string = this.to_rainbow('Reloading Proxy')
@@ -55,7 +55,7 @@ if __name__ == '__main__':
 				importlib.reload(this)
 				proxy.close()
 				proxy.lock.acquire()
-				proxy = this.TCPProxy(this.logger, '0.0.0.0', '127.0.0.1', this.FROM_PORT, this.TO_PORT)
+				proxy = this.TCPProxy(this.logger, '0.0.0.0', '{{TARGET_IP}}', this.FROM_PORT, this.TO_PORT)
 				proxy.start()
 
 		except KeyboardInterrupt:

@@ -32,7 +32,7 @@ def ensure_remote_dependencies(ssh):
 
         commands = [
             "apt-get update -y",
-            "apt-get install -y zip rsync git"
+            "apt-get install -y zip rsync git screen",
         ]
 
         for cmd in commands:

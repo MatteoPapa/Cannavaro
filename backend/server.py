@@ -211,7 +211,7 @@ def install_proxy():
 
     try:
         log.info(f"Installing proxy for service: {parent}, subservice: {subservice}")
-        result = install_proxy_for_service(ssh, parent, subservice)
+        result = install_proxy_for_service(ssh, config, parent, subservice)
         if result["success"]:
             return jsonify({"message": "Proxy installed successfully."}), 200
         else:
