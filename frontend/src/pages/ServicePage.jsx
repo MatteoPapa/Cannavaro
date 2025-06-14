@@ -80,11 +80,29 @@ function ServicePage() {
     }
   };
 
-  const copyGitClone = async (service, vmIp) => {
-    await navigator.clipboard.writeText(
-      `GIT_SSH_COMMAND='ssh -i ./git_key.pem' git clone gituser@${vmIp}:/root/${service}`
-    );
-    showAlert("Git command copied successfully", "success");
+  const copyGitClone = (service, vmIp) => { // New copy function <---------- Supported over HTTP 
+    const text = `GIT_SSH_COMMAND='ssh -i ~/git_key.pem' git clone ssh://root@${vmIp}/root/${service}`;
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed"; // Prevents scroll jump
+    textarea.style.opacity = "0"; // Hidden from view
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      const successful = document.execCommand("copy");
+      if (successful) {
+        showAlert("Git command copied successfully", "success");
+      } else {
+        showAlert("Copy failed", "error");
+      }
+    } catch (err) {
+      showAlert(`Copy not supported: ${err.message}`, "error");
+    }
+
+    document.body.removeChild(textarea);
   };
 
   const handleResetDocker = async () => {
