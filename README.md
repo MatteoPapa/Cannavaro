@@ -1,14 +1,14 @@
 # Cannavaro 🛡️  
-*A Defensive Line for A/D CTFs – Now with Git Magic*
+Now with ✨ **Git Magic** ✨*
 
 <h3 align="center">
-  <img src="https://github.com/user-attachments/assets/fb32d4e0-c403-48b5-8dab-5f74b3015e21" alt="Cannavaro Screenshot" />
+  <img src="https://github.com/user-attachments/assets/9fc8bbd5-7ba4-4d33-8200-4a5ed27ffe53" alt="Cannavaro Screenshot" />
 </h3>
 
-**Cannavaro**  is a tactical automation toolkit built for the defense side of Attack/Defense Capture The Flag (CTF) competitions.
-It streamlines service patching by initializing and configuring Git repositories on remote VMs, enabling clean version control, collaborative workflows, and rollback-friendly deployments.
-Designed for speed, clarity, and control, Cannavaro automates SSH setup, Git bootstrapping, patch delivery, and Docker restarts — so you can focus on defending, not debugging.
+**Cannavaro** is a tactical automation toolkit built for the defense side of Attack/Defense Capture The Flag (CTF) competitions. <br>
+Designed for speed, clarity, and control, Cannavaro automates SSH setup, Git bootstrapping, patch delivery, and Docker restarts — so you can focus on defending, not debugging.<br>
 Named after Fabio Cannavaro — the last defender you want to get past.
+
 ---
 
 ## 🧠 What It Does
