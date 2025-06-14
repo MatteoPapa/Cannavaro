@@ -21,8 +21,9 @@ import ElectricalServicesIcon from "@mui/icons-material/ElectricalServices";
 import IconButton from "@mui/material/IconButton";
 import LockOutlineIcon from "@mui/icons-material/LockOutline";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import Tooltip from "@mui/material/Tooltip";
+import ShieldIcon from "@mui/icons-material/Shield";
 import { Accordion, AccordionSummary, AccordionDetails } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
@@ -81,7 +82,8 @@ function ServicePage() {
     }
   };
 
-  const copyGitClone = (service, vmIp) => { // New copy function <---------- Supported over HTTP 
+  const copyGitClone = (service, vmIp) => {
+    // New copy function <---------- Supported over HTTP
     const text = `GIT_SSH_COMMAND='ssh -i ~/git_key.pem' git clone ssh://root@${vmIp}/root/${service}`;
 
     const textarea = document.createElement("textarea");
@@ -154,7 +156,30 @@ function ServicePage() {
     } finally {
       setRestartingDocker(false);
     }
+  };
+
+  const handleInstallProxy = async (subservice) => {
+  try {
+    const res = await fetch("/api/install_proxy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service: name,
+        subservice: subservice,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Unknown error");
+    }
+
+    showAlert(`Proxy installed for ${subservice}`, "success");
+  } catch (err) {
+    showAlert(`Failed to install proxy: ${err.message}`, "error");
   }
+};
 
   if (!service) {
     return (
@@ -280,10 +305,19 @@ function ServicePage() {
                   <IconButton
                     onClick={() => handleResetSubservice(service.name)}
                     disabled={lockedServices.has(service.name)}
-                    color =  "primary"
+                    color="primary"
                   >
                     <Tooltip title="Restart this subservice only">
-                      <RestartAltIcon fontSize={"large"}/>
+                      <RestartAltIcon fontSize={"large"} />
+                    </Tooltip>
+                  </IconButton>
+                  <IconButton
+                    onClick={() => handleInstallProxy(service.name)}
+                    disabled={lockedServices.has(service.name)}
+                    color="secondary"
+                  >
+                    <Tooltip title="Install proxy on this service">
+                      <ShieldIcon fontSize={"large"} />
                     </Tooltip>
                   </IconButton>
                 </Box>

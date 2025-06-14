@@ -5,7 +5,7 @@ from bson import ObjectId
 from utils.zip_utils import *
 from utils.services_utils import *
 from utils.logging_utils import log
-
+from utils.proxy_utils import install_proxy_for_service
 
 # ─── Paths & Constants ─────────────────────
 BASE_DIR = os.path.dirname(__file__)
@@ -199,6 +199,26 @@ def reset_docker():
         return jsonify({"error": "Some services failed to restart", "details": failed}), 500
 
     return jsonify({"message": "Services restarted successfully."}), 200
+
+@app.route("/api/install_proxy", methods=["POST"])
+def install_proxy():
+    data = request.get_json()
+    parent = data.get("service")
+    subservice = data.get("subservice")
+
+    if not parent or not subservice:
+        return jsonify({"error": "Missing 'service' or 'subservice' in request"}), 400
+
+    try:
+        log.info(f"Installing proxy for service: {parent}, subservice: {subservice}")
+        result = install_proxy_for_service(ssh, parent, subservice)
+        if result["success"]:
+            return jsonify({"message": "Proxy installed successfully."}), 200
+        else:
+            return jsonify({"error": result["error"]}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
