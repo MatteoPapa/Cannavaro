@@ -50,7 +50,6 @@ def initialize_service_repo(ssh, config, path):
     Initializes a Git repository in the specified path if one doesn't exist.
     Sets shared group access, permissions, and makes an initial commit if needed.
     """
-    user = config["gituser_name"]
 
     try:
         log.info(f"📁 Checking if {path} is already a Git repository...")

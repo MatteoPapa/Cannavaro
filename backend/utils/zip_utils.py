@@ -2,6 +2,7 @@
 import zipfile
 import os
 import datetime
+from utils.logging_utils import log
 
 def setup_zip_dirs(base_dir):
     startup_zip_path = os.path.join(base_dir, 'home_backup_startup.zip')
@@ -28,6 +29,7 @@ def create_and_download_zip(ssh, base_dir, filename="home_backup.zip"):
     try:
         sftp.stat(remote_zip_path)
     except FileNotFoundError:
+        log.error(f"❌ Remote zip file {remote_zip_path} not found.")
         sftp.close()
         return None
 

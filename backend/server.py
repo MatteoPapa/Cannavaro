@@ -9,7 +9,6 @@ from utils.logging_utils import log
 
 # ─── Paths & Constants ─────────────────────
 BASE_DIR = os.path.dirname(__file__)
-CONFIG_PATH = os.path.join(BASE_DIR, 'config.yaml')
 ZIP_BASE_DIR = os.path.join(BASE_DIR, 'zip')
 STARTUP_ZIP_PATH, CURRENT_ZIP_DIR = setup_zip_dirs(ZIP_BASE_DIR)
 
@@ -47,20 +46,18 @@ def get_services():
 
     return jsonify({"error": "Service not found", "available": [s['name'] for s in services]}), 400
 
-YAML_FILE = "services.yaml"
-
 @app.route("/api/service_locks")
 def get_service_locks():
     parent = request.args.get("parent")
     if not parent:
         return jsonify({"error": "Missing 'parent' query param"}), 400
 
-    # Load YAML
-    with open(YAML_FILE, "r") as f:
-        services = yaml.safe_load(f)
+    services = config.get("services")
+    if not services:
+        return jsonify({"error": "No services configured"}), 400
 
     locked_services = []
-    for group in services.get("services", []):
+    for group in services:
         if group["name"] == parent:
             for subservice in group.get("services", []):
                 if subservice.get("locked"):
@@ -213,6 +210,7 @@ def serve_react(path):
         return send_from_directory(app.static_folder, 'index.html')
 
 def run_server():
+    create_and_download_zip(ssh, ZIP_BASE_DIR,filename="home_backup_startup.zip")
     app.run(host='0.0.0.0', port=7000, debug=False)
 
 if __name__ == "__main__":

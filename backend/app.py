@@ -31,7 +31,7 @@ def main():
 
     # --- Parse services ----------
     initialize_services(ssh, config, SERVICES_YAML_PATH)
-
+    
     # --- Git Setup ---------------
     setup_ssh_key(ssh, config)
     initialize_all_repos(ssh, config)
