@@ -1,48 +1,39 @@
-# Cannavaro 🛡️
+# Cannavaro 🛡️  
+*A Defensive Line for A/D CTFs – Now with Git Magic*
 
 <h3 align="center">
   <img src="https://github.com/user-attachments/assets/fb32d4e0-c403-48b5-8dab-5f74b3015e21" alt="Cannavaro Screenshot" />
 </h3>
 
-**Cannavaro** is a powerful tool built to streamline and support the defense side of Attack/Defense Capture The Flag (CTF) competitions.
-
-It automates tedious tasks, enables easy patching of remote services, and provides a modern interface for applying and managing changes on-the-fly.
-
----
-
-<h6 align="center">
-  <img src="https://github.com/user-attachments/assets/d5de1a65-c9ec-4758-9f0f-8c9a1a1bfd09" alt="Cannavaro Screenshot" width="750" />
-</h6>
-
+**Cannavaro**  is a tactical automation toolkit built for the defense side of Attack/Defense Capture The Flag (CTF) competitions.
+It streamlines service patching by initializing and configuring Git repositories on remote VMs, enabling clean version control, collaborative workflows, and rollback-friendly deployments.
+Designed for speed, clarity, and control, Cannavaro automates SSH setup, Git bootstrapping, patch delivery, and Docker restarts — so you can focus on defending, not debugging.
+Named after Fabio Cannavaro — the last defender you want to get past.
 ---
 
 ## 🧠 What It Does
 
-- 🔐 Seamless SSH setup – Automatically configures SSH access to remote virtual machines.
-- 🔍 Service discovery – Detects and lists all active services on the remote VM, along with their exposed ports.
-- 📦 File versioning – Allows you to download both the original and current versions of remote files as ZIP archives.
-- 🩹 Effortless patching – Apply patches by simply dragging and dropping the modified files.
-- ↩️ One-click rollback – Instantly revert to a previous state if a patch doesn't work as expected.
+- 🔐 **SSH Automation** – Securely sets up SSH access to remote virtual machines and installs authorized keys.
+- 📦 **Git Repo Magic** – Initializes a Git repository for each service and configures it for collaboration.
+- 🔍 **Service Discovery** – Lists all configured services and subservices.
+- 🕹️ **Easy File Download** – Download current and startup versions of remote files as ZIPs for fast recovery.
+- 🔄 **Docker Restarts** – Restart Docker services (selectively or in bulk), respecting service lock status.
 
 ---
 
 ## 🚀 Getting Started
-Before running Cannavaro, make sure to properly configure the config.yaml file located in the backend/ directory.
-This file contains essential settings for the tool to interact with remote VMs and apply patches correctly.
-You can run **Cannavaro** using Docker Compose. Even easier, just use the provided startup scripts:
 
-- On **Windows**: run `start.bat`
-- On **Linux/macOS/WSL**: run `start.sh`
+1. **Edit Configuration**  
+   Modify `backend/config.yaml` to match your environment and services.
 
-### Manual Setup
+2. **Start Cannavaro**  
+   Using Docker Compose:
+   ```bash
+   docker compose up --build
+   ```
 
-If a services.yaml file is present in the backend/ directory, the server will resume from the previous session.
-To start fresh, simply delete this file before launching the containers.
-
-```bash
-docker compose down
-docker compose up --build
-```
+3. **Access**  
+   By default Cannavaro is exposed on port 7000.
 
 ---
 
@@ -50,37 +41,15 @@ docker compose up --build
 
 - 🧠 **Backend**: Flask (Python)
 - 🎨 **Frontend**: React + Vite.js
-- 🧩 **UI**: Material UI for a sleek, modern interface
+- 🧩 **UI**: Material UI
 - 🐋 **Containerization**: Docker + Docker Compose
-- 🧱 **Database**: MongoDB (used for storing and retrieving session-related data)
-
----
-
-## 📁 Project Structure
-
-```
-Cannavaro/
-├── backend/
-│   ├── services.yaml (generated during usage)
-│   └── ... (Flask app)
-├── frontend/
-│   └── ... (React app)
-├── start.sh
-├── start.bat
-└── docker-compose.yml
-```
 
 ---
 
 ## 🤝 Contributions
 
-Coming soon — for now, feel free to fork the repo or use it privately during competitions!
+Coming soon — but feel free to fork and adapt during competitions!
 
 ---
 
-## 📢 Notes
-
-- Designed for fast-paced competitive environments — keep your head in the game, not in the terminal.
-- Cannavaro is named after Fabio Cannavaro — a wall in defense, just like this tool aims to be.
-
-Good luck, and happy defending! 🛡️⚔️
+Good luck, and may your services never go down! 🛡️⚔️
