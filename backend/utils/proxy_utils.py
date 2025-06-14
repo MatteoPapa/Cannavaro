@@ -1,7 +1,9 @@
 import yaml
 import os
+import posixpath
 from utils.ssh_utils import run_remote_command
 from utils.services_utils import rolling_restart_docker_service
+from utils.logging_utils import log
 
 def find_compose_file(ssh, service_path):
     possible_names = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]
@@ -56,9 +58,39 @@ def install_proxy_for_service(ssh, parent, subservice):
             git commit -m '{commit_msg}'
         """)
 
+        # Upload demon hill proxy script
+        remote_path = posixpath.join("/root", f"{parent}_proxy.py")
+        local_proxy_path = os.path.join(os.path.dirname(__file__), "../assets/demon_hill.py")
+        try:
+            sftp = ssh.open_sftp()
+            sftp.put(local_proxy_path, remote_path)
+            sftp.chmod(remote_path, 0o755)
+            sftp.close()
+            log.info(f"✅ Demon Hill proxy script uploaded to {remote_path}")
+        except Exception as e:
+            return {"success": False, "error": f"Subservice modified, but demon hill proxy script upload failed: {e}"}
+
         return rolling_restart_docker_service(ssh, f"/root/{parent}", [subservice])
 
     except Exception as e:
         # Restore backup if anything goes wrong
         run_remote_command(ssh, f"mv {backup_path} {compose_path}")
         return {"success": False, "error": f"Failed to install proxy: {e}"}
+
+def upload_proxy_script(ssh, local_path, service_name):
+    """
+    Uploads the proxy file to the remote VM under /root/{service}_proxy
+    """
+    import posixpath
+
+    remote_path = posixpath.join("/root", f"{service_name}_proxy")
+    try:
+        sftp = ssh.open_sftp()
+        sftp.put(local_path, remote_path)
+        sftp.chmod(remote_path, 0o755)
+        sftp.close()
+        log.info(f"✅ Proxy script uploaded to {remote_path}")
+        return {"success": True}
+    except Exception as e:
+        log.error(f"❌ Failed to upload proxy script: {e}")
+        return {"success": False, "error": str(e)}
