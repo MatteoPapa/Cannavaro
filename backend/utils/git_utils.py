@@ -105,14 +105,7 @@ def initialize_service_repo(ssh, config, path):
             run_remote_command(ssh, f"git init {path}")
 
         # Configure shared repo access
-        shared_mode = run_remote_command(
-            ssh, f"cd {path} && git config --get core.sharedRepository || echo none"
-        ).strip()
-        if shared_mode != "group":
-            log.info("🔧 Configuring Git shared group access...")
-            run_remote_command(ssh, f"cd {path} && git config core.sharedRepository group")
-        else:
-            log.info("✅ Git already configured for shared group access.")
+        run_remote_command(ssh, f"cd {path} && git config core.sharedRepository group")
 
         # Ensure Git can update when pushed to
         run_remote_command(ssh, f"cd {path} && git config receive.denyCurrentBranch updateInstead")
@@ -127,7 +120,7 @@ def initialize_service_repo(ssh, config, path):
             run_remote_command(ssh, f"cd {path} && git config user.name 'Root Automation'")
             run_remote_command(ssh, f"cd {path} && git config user.email 'root@localhost'")
             run_remote_command(ssh, f"cd {path} && git add .")
-            run_remote_command(ssh, f"cd {path} && git commit -m 'Initial commit: imported services'")
+            run_remote_command(ssh, f"cd {path} && git commit -m 'Initial commit: imported service'")
         else:
             log.info("✅ Initial commit already exists.")
 

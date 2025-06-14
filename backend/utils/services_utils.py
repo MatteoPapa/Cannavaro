@@ -32,8 +32,7 @@ def extract_ports(ports):
     return extracted
 
 def list_vm_services_with_ports(ssh, root_dir="/root"):
-    stdin, stdout, stderr = ssh.exec_command(
-            f"find {root_dir} -maxdepth 2 -type f \\( -name 'docker-compose.yml' -o -name 'compose.yml' \\)")
+    stdin, stdout, stderr = ssh.exec_command(f"find {root_dir} -maxdepth 2 -type f -regex '.*/\\(docker-\\)?compose\\.ya?ml'")
 
     compose_paths = stdout.read().decode().splitlines()
     services = []
