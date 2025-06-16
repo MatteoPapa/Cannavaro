@@ -2,6 +2,12 @@ import os
 import paramiko
 from utils.logging_utils import log
 
+def is_ssh_active(ssh):
+    try:
+        return ssh is not None and ssh.get_transport() and ssh.get_transport().is_active()
+    except Exception:
+        return False
+    
 def ssh_connect(config):
     """
     Establishes an SSH connection to the remote VM using password authentication.

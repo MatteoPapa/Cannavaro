@@ -26,12 +26,11 @@ import Tooltip from "@mui/material/Tooltip";
 import ShieldIcon from "@mui/icons-material/Shield";
 import CircularProgress from "@mui/material/CircularProgress";
 import ConfirmDialog from "../components/ConfirmDialog";
-import SaveIcon from '@mui/icons-material/Save';
-import CachedIcon from '@mui/icons-material/Cached';
+import SaveIcon from "@mui/icons-material/Save";
+import CachedIcon from "@mui/icons-material/Cached";
 import SubserviceCard from "../components/SubserviceCard";
 import DockerActionsBar from "../components/DockerActionsBar";
 import ProxyActionsCard from "../components/ProxyActionsCard";
-
 
 function ServicePage() {
   const { name } = useParams();
@@ -253,8 +252,17 @@ function ServicePage() {
 
       <Divider sx={{ mb: 2 }} />
 
-      <Box display="flex" justifyContent="center" mb={2} gap={2}>
-        <Card variant="outlined" sx={{ flex: 1, borderRadius: 2, boxShadow: 6 }}>
+      <Box
+        display="flex"
+        justifyContent="center"
+        flexDirection="column"
+        mb={2}
+        gap={2}
+      >
+        <Card
+          variant="outlined"
+          sx={{ flex: 1, borderRadius: 2, boxShadow: 6 }}
+        >
           <CardContent>
             <DockerActionsBar
               restarting={restartingDocker}
@@ -263,25 +271,31 @@ function ServicePage() {
               onCopy={() => copyGitClone(service.name, vmIp)}
             />
 
-            <Stack spacing={3} width="100%" alignItems="center" mt={4}>
+            <Box display="flex" flexWrap="wrap" gap={2} mt={4}>
               {service.services.map((svc) => (
-                <SubserviceCard
-                  key={svc.name}
-                  service={svc}
-                  isLocked={lockedServices.has(svc.name)}
-                  onToggleLock={handleLockToggle}
-                  onRestart={handleResetSubservice}
-                  onInstallProxy={triggerInstallProxy}
-                  isInstallingProxy={settingProxy}
-                />
+                <>
+                  <Box key={svc.name} flex={0.5}>
+                    <SubserviceCard
+                      service={svc}
+                      isLocked={lockedServices.has(svc.name)}
+                      onToggleLock={handleLockToggle}
+                      onRestart={handleResetSubservice}
+                      onInstallProxy={triggerInstallProxy}
+                      isInstallingProxy={settingProxy}
+                    />
+                  </Box>
+                </>
               ))}
-            </Stack>
+            </Box>
           </CardContent>
         </Card>
 
-        <ProxyActionsCard onSave={handleResetDocker} onReload={() => handleReloadProxy(name)} />
+        <ProxyActionsCard
+          onSave={handleResetDocker}
+          onReload={() => handleReloadProxy(name)}
+          service={service}
+        />
       </Box>
-
 
       <ConfirmDialog
         open={confirmOpen}

@@ -30,11 +30,10 @@ def is_proxy_installed(ssh, service_name):
     """
     Checks if the proxy file for the given service already exists on the VM.
     """
-    remote_path = f"/root/proxy_{service_name}.py"
+    remote_path = f"/root/{service_name}/proxy_{service_name}.py"
     stdin, stdout, stderr = ssh.exec_command(f"test -f {remote_path} && echo exists || echo missing")
     output = stdout.read().decode().strip()
     return output == "exists"
-
 
 # ----- MAIN FUNCTIONS -----
 def install_proxy_for_service(ssh, config, parent, subservice):
@@ -123,7 +122,7 @@ def install_proxy_for_service(ssh, config, parent, subservice):
         )
 
         # Upload the rendered proxy script
-        remote_path = posixpath.join("/root", f"proxy_{parent}.py")
+        remote_path = posixpath.join(f"/root/{parent}", f"proxy_{parent}.py")
         try:
             import tempfile
             with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
@@ -142,12 +141,19 @@ def install_proxy_for_service(ssh, config, parent, subservice):
 
             screen_name = (f"proxy_{parent}")
             start_cmd = (
-                f"screen -L -Logfile /root/screen_log_{screen_name}.txt "
+                f"screen -L -Logfile /root/{parent}/log_{screen_name}.txt "
                 f"-S {screen_name} -dm bash -lic 'python3 {remote_path}'"
             )
 
             run_remote_command(ssh, start_cmd)
-            
+
+            proxy_filename = f"proxy_{parent}.py"
+            run_remote_command(ssh, f"""
+                cd /root/{parent} && \
+                git add {os.path.basename(compose_path)} {proxy_filename} && \
+                git commit -m '{commit_msg} + added proxy script'
+            """)
+
 
             #Reload the proxy screen three times for good measure
             # for _ in range(3):
@@ -177,5 +183,25 @@ def reload_proxy_screen(ssh, service_name):
     
     # Send reload signal
     cmd = f"screen -S {screen_name} -X stuff 'r\\n'"
+    #Twice for good measure
+    run_remote_command(ssh, cmd)
     run_remote_command(ssh, cmd)
     return {"success": True, "message": f"Reload signal sent to proxy {screen_name}"}
+
+def get_logs(ssh, service_name):
+    log_path = f"/root/{service_name}/log_proxy_{service_name}.txt"
+    try:
+        stdin, stdout, stderr = ssh.exec_command(f"cat {log_path}")
+        logs = stdout.read().decode()
+        return {"success": True, "logs": logs}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    
+def get_code(ssh, service_name):        
+    code_path = f"/root/{service_name}/proxy_{service_name}.py"
+    try:
+        stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
+        code = stdout.read().decode()
+        return {"success": True, "code": code}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

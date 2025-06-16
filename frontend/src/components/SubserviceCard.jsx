@@ -12,6 +12,8 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import ShieldIcon from "@mui/icons-material/Shield";
 import DetailsMenu from "./DetailsMenu";
+import InfoOutlineIcon from "@mui/icons-material/InfoOutline";
+import InfoWithDetails from "../assets/InfoWithDetails";
 
 function SubserviceCard({
   service,
@@ -19,14 +21,14 @@ function SubserviceCard({
   onToggleLock,
   onRestart,
   onInstallProxy,
-  isInstallingProxy
+  isInstallingProxy,
 }) {
   return (
     <Card
       variant="outlined"
       sx={{
         width: "100%",
-        maxWidth: 500,
+        minWidth: 500,
         bgcolor: "background.paper",
         borderRadius: 2,
         border: "none",
@@ -35,7 +37,7 @@ function SubserviceCard({
     >
       <CardContent>
         <Box display="flex" gap={2}>
-          <Box  display="flex" alignItems="center" justifyContent="center">
+          <Box display="flex" alignItems="center" justifyContent="center">
             <IconButton onClick={() => onToggleLock(service.name)}>
               {isLocked ? (
                 <Tooltip title="The service will not be restarted">
@@ -50,12 +52,16 @@ function SubserviceCard({
           </Box>
 
           <Box flexGrow={1}>
-            <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Box
+              display="flex"
+              justifyContent="space-between"
+              alignItems="center"
+            >
               <Box display="flex" alignItems="center" gap={1}>
-                <ElectricalServicesIcon fontSize="medium" color="primary" />
                 <Typography variant="h6">
                   {service.name.charAt(0).toUpperCase() + service.name.slice(1)}
                 </Typography>
+                <InfoWithDetails service={service} />
               </Box>
 
               <Box>
@@ -80,9 +86,6 @@ function SubserviceCard({
               </Box>
             </Box>
             <Box>
-              <DetailsMenu name="Environment" list={service.environment} />
-              <DetailsMenu name="Mounted Volumes" list={service.volumes} />
-              <DetailsMenu name="Exposed Ports" list={service.ports} />
             </Box>
           </Box>
         </Box>

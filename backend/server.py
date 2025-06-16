@@ -1,11 +1,14 @@
+import os
+import threading
+import time
 from flask import Flask, jsonify, send_file, request, after_this_request, send_from_directory
 from flask_cors import CORS
-import os
 from bson import ObjectId
 from utils.zip_utils import *
 from utils.services_utils import *
 from utils.logging_utils import log
-from utils.proxy_utils import install_proxy_for_service, is_proxy_installed, reload_proxy_screen
+from utils.proxy_utils import *
+from utils.ssh_utils import *
 
 # ─── Paths & Constants ─────────────────────
 BASE_DIR = os.path.dirname(__file__)
@@ -16,92 +19,74 @@ STARTUP_ZIP_PATH, CURRENT_ZIP_DIR = setup_zip_dirs(ZIP_BASE_DIR)
 app = Flask(__name__)
 CORS(app)
 
-# ─── Globals  ──────────────────────────
+# ─── Globals ───────────────────────────────
 config = None
 ssh = None
 
+# ─── SSH Management ────────────────────────
 def set_dependencies(ext_config, ext_ssh):
     global config, ssh
     config = ext_config
     ssh = ext_ssh
 
-# ─── API Routes ────────────────────────────
+
+def get_active_ssh():
+    global ssh
+    if not is_ssh_active(ssh):
+        log.warning("SSH inactive — reconnecting...")
+        ssh = ssh_connect(config)
+    return ssh
+
+# ─── Utility ───────────────────────────────
+def get_service_by_name(name):
+    return next((s for s in config.get("services", []) if s["name"] == name), None)
+
+# ─── Routes ────────────────────────────────
 @app.route("/api/vm_ip")
 def get_vm_ip():
     return jsonify(config.get("remote_host", "No VM IP configured"))
 
 @app.route("/api/services")
 def get_services():
-    services = config.get("services", None)
-    if not services:
-        return jsonify({"error": "No services configured"}), 400
-
     name = request.args.get("name")
+    services = config.get("services", [])
     if not name:
         return jsonify(services)
 
-    match = next((s for s in services if s["name"] == name), None)
-    if match:
-        return jsonify(match)
-
+    service = get_service_by_name(name)
+    if service:
+        return jsonify(service)
     return jsonify({"error": "Service not found", "available": [s['name'] for s in services]}), 400
 
-@app.route("/api/service_locks")
-def get_service_locks():
-    parent = request.args.get("parent")
-    if not parent:
-        return jsonify({"error": "Missing 'parent' query param"}), 400
+@app.route("/api/service_locks", methods=["GET", "POST"])
+def service_locks():
+    if request.method == "GET":
+        parent = request.args.get("parent")
+        if not parent:
+            return jsonify({"error": "Missing 'parent' param"}), 400
+        service = get_service_by_name(parent)
+        if not service:
+            return jsonify({"error": "Service not found"}), 400
+        locked = [s["name"] for s in service.get("services", []) if s.get("locked")]
+        return jsonify({"locked": locked})
 
-    services = config.get("services")
-    if not services:
-        return jsonify({"error": "No services configured"}), 400
-
-    locked_services = []
-    for group in services:
-        if group["name"] == parent:
-            for subservice in group.get("services", []):
-                if subservice.get("locked"):
-                    locked_services.append(subservice["name"])
-            break
-
-    return jsonify({"locked": locked_services})
-
-@app.route("/api/service_locks", methods=["POST"])
-def update_service_locks():
     data = request.get_json()
     parent = data.get("parent")
-    service_name = data.get("service")
+    sub = data.get("service")
     lock = data.get("lock")
 
-    if not parent or not service_name:
-        return jsonify({"error": "Missing 'parent' or 'service' in body"}), 400
+    service = get_service_by_name(parent)
+    if not service:
+        return jsonify({"error": "Parent not found"}), 400
 
-    services = config.get("services")
-    if not services:
-        return jsonify({"error": "No services configured"}), 400
+    for s in service.get("services", []):
+        if s["name"] == sub:
+            s["locked"] = bool(lock)
+            break
+    else:
+        return jsonify({"error": "Subservice not found"}), 404
 
-    updated = False
-    for service in services:
-        if service["name"] == parent:
-            for subservice in service.get("services", []):
-                if subservice["name"] == service_name:
-                    subservice["locked"] = bool(lock)
-                    updated = True
-                    break
-            break  # parent found, no need to keep looping
-
-    if not updated:
-        return jsonify({"error": "Service not found"}), 404
-
-    # Return currently locked services for this parent
-    locked = [
-        s["name"]
-        for g in services
-        if g["name"] == parent
-        for s in g.get("services", [])
-        if s.get("locked") is True
-    ]
-
+    locked = [s["name"] for s in service.get("services", []) if s.get("locked")]
     return jsonify({"locked": locked})
 
 @app.route("/api/get_startup_zip")
@@ -112,146 +97,120 @@ def get_startup_zip():
 
 @app.route("/api/get_current_zip")
 def get_current_zip():
-    if not ssh:
-        return jsonify({"error": "SSH not connected"}), 500
     try:
+        active_ssh = get_active_ssh()
         filename = create_timestamped_filename()
-        temp_zip_path = create_and_download_zip(ssh, ZIP_BASE_DIR, filename)
+        zip_path = create_and_download_zip(active_ssh, ZIP_BASE_DIR, filename)
 
-        if not temp_zip_path:
+        if not zip_path:
             return jsonify({"error": "Failed to create ZIP"}), 500
 
-        stored_path = os.path.join(CURRENT_ZIP_DIR, filename)
-
-        # Ensure target folder exists
+        dest_path = os.path.join(CURRENT_ZIP_DIR, filename)
         os.makedirs(CURRENT_ZIP_DIR, exist_ok=True)
-        os.rename(temp_zip_path, stored_path)
+        os.rename(zip_path, dest_path)
 
         @after_this_request
         def cleanup(response):
             try:
-                os.remove(stored_path)
+                os.remove(dest_path)
             except Exception as e:
-                log.error(f"Failed to delete temporary zip: {e}")
+                log.error(f"Cleanup failed: {e}")
             return response
 
-        return send_file(stored_path, as_attachment=True)
-
+        return send_file(dest_path, as_attachment=True)
     except Exception as e:
-        log.error(f"Error creating current zip: {e}")
+        log.error(f"ZIP error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/get_git_key")
 def get_git_key():
-    git_key_path = config.get("local_private_key_file")
-    if not git_key_path or not os.path.exists(git_key_path):
-        return jsonify({"error": "Git key not configured or file not found"}), 404
-
-    return send_file(git_key_path, as_attachment=True)
+    path = config.get("local_private_key_file")
+    if not path or not os.path.exists(path):
+        return jsonify({"error": "Git key not configured or missing"}), 404
+    return send_file(path, as_attachment=True)
 
 @app.route("/api/reset_docker", methods=["POST"])
 def reset_docker():
-    data = request.get_json(silent=True) or {}
-    parent = data.get("service")
-    target_sub = data.get("subservice")  # Optional
+    data = request.get_json()
+    parent, sub = data.get("service"), data.get("subservice")
+    active_ssh = get_active_ssh()
 
-    if not parent:
-        return jsonify({"error": "Missing 'service' in request"}), 400
-    
-    parent_entry = next((s for s in config.get("services", []) if s["name"] == parent), None)
-    if not parent_entry:
-        return jsonify({"error": f"Parent service '{parent}' not found in config"}), 404
+    service = get_service_by_name(parent)
+    if not service:
+        return jsonify({"error": "Service not found"}), 404
 
-    subservices = parent_entry.get("services", [])
-    service_path = f"/root/{parent}"
-    log.info(f"Resetting Docker for parent service: {parent} at path {service_path}")
-
-    failed, restarted = [], []
-    to_restart = []
-
-    if target_sub:
-        target_entry = next((s for s in subservices if s["name"] == target_sub), None)
-        if not target_entry:
-            return jsonify({"error": f"Subservice '{target_sub}' not found under '{parent}'"}), 404
-        if target_entry.get("locked"):
-            return jsonify({"error": f"Subservice '{target_sub}' is locked"}), 403
-        to_restart = [target_sub]
-    else:
-        for svc_obj in subservices:
-            if not svc_obj.get("locked"):
-                to_restart.append(svc_obj['name'])
+    unlocked = [s["name"] for s in service["services"] if not s.get("locked")]
+    to_restart = [sub] if sub else unlocked
 
     if not to_restart:
         return jsonify({"error": "No services to restart"}), 400
 
-    if not target_sub and all(not s.get("locked") for s in subservices):
-        result = restart_docker_service(ssh, parent)
-    else:
-        result = rolling_restart_docker_service(ssh, service_path, to_restart)
+    path = f"/root/{parent}"
+    result = (restart_docker_service if not sub else rolling_restart_docker_service)(active_ssh, path, to_restart)
 
     if result.get("success"):
-        restarted.extend(result.get("restarted", []))
-    else:
-        for svc in to_restart:
-            failed.append({"service": svc, "error": result.get("error")})
-
-    if failed:
-        return jsonify({"error": "Some services failed to restart", "details": failed}), 500
-
-    return jsonify({"message": "Services restarted successfully."}), 200
+        return jsonify({"message": "Services restarted", "restarted": result.get("restarted", [])})
+    return jsonify({"error": result.get("error")}), 500
 
 @app.route("/api/install_proxy", methods=["POST"])
 def install_proxy():
     data = request.get_json()
-    parent = data.get("service")
-    subservice = data.get("subservice")
+    parent, sub = data.get("service"), data.get("subservice")
+    active_ssh = get_active_ssh()
 
-    if not parent or not subservice:
-        return jsonify({"error": "Missing 'service' or 'subservice' in request"}), 400
+    if is_proxy_installed(active_ssh, parent):
+        return jsonify({"error": "Proxy already installed"}), 400
 
-    try:
-        if is_proxy_installed(ssh, parent):
-            log.info(f"Proxy for {parent} already installed — skipping")
-            return jsonify({"error": "Proxy already installed"}), 400
-        
-        log.info(f"Installing proxy for service: {parent}, subservice: {subservice}")
-        result = install_proxy_for_service(ssh, config, parent, subservice)
-        if result["success"]:
-            return jsonify({"message": "Proxy installed successfully."}), 200
-        else:
-            return jsonify({"error": result["error"]}), 500
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    result = install_proxy_for_service(active_ssh, config, parent, sub)
+    if result.get("success"):
+        return jsonify({"message": "Proxy installed"})
+    return jsonify({"error": result.get("error")}), 500
 
 @app.route("/api/reload_proxy", methods=["POST"])
 def reload_proxy():
     data = request.get_json()
     service = data.get("service")
+    active_ssh = get_active_ssh()
 
-    if not service:
-        return jsonify({"error": "Missing 'service' in request"}), 400
+    if not is_proxy_installed(active_ssh, service):
+        return jsonify({"error": "Proxy not installed"}), 400
 
-    try:
-        log.info(f"Reloading proxy for service: {service}")
-        if not is_proxy_installed(ssh, service):
-            return jsonify({"error": "Proxy not installed for this service"}), 400
-        result = reload_proxy_screen(ssh, service)
-        return jsonify(result), 200
-    except Exception as e:
-        return jsonify({"error": f"Failed to reload proxy: {str(e)}"}), 500
+    result = reload_proxy_screen(active_ssh, service)
+    return jsonify(result)
+
+@app.route("/api/get_proxy_logs", methods=["POST"])
+def get_proxy_logs():
+    data = request.get_json()
+    service = data.get("service")
+    active_ssh = get_active_ssh()
+
+    result = get_logs(active_ssh, service)
+    if result.get("success"):
+        return jsonify({"logs": result["logs"]})
+    return jsonify({"error": result.get("error")}), 500
+
+@app.route("/api/get_proxy_code", methods=["POST"])
+def get_proxy_code():
+    data = request.get_json()
+    service = data.get("service")
+    active_ssh = get_active_ssh()
+
+    result = get_code(active_ssh, service)
+    if result.get("success"):
+        return jsonify({"code": result["code"]})
+    return jsonify({"error": result.get("error")}), 500
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_react(path):
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        log.info(f"Serving static file: {path}")
+    target = os.path.join(app.static_folder, path)
+    if path != "" and os.path.exists(target):
         return send_from_directory(app.static_folder, path)
-    else:
-        log.info("Serving index.html")
-        return send_from_directory(app.static_folder, 'index.html')
+    return send_from_directory(app.static_folder, 'index.html')
+
 
 def run_server():
-    create_and_download_zip(ssh, ZIP_BASE_DIR,filename="home_backup_startup.zip")
+    create_and_download_zip(get_active_ssh(), ZIP_BASE_DIR, filename="home_backup_startup.zip")
     app.run(host='0.0.0.0', port=7000, debug=False)
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@ function RegexEditor() {
     };
 
     return (
-        <Box>
+        <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 1, minHeight: "700px" }}>
             <Box display="flex" gap={1}>
                 <TextField
                     label="Add new regex"

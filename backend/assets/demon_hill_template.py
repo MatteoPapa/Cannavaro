@@ -20,7 +20,6 @@ FLAG_LEN = 32
 FLAG_REGEX = rb'[A-Z0-9]{31}='
 
 REGEX_MASKS = [
-	rb'1\n[a-zA-Z0-9]{3}\n\n5\n2\n[a-zA-Z0-9]*\n3\n0\n2\n',
 ]
 
 REGEX_MASKS_2 = [
@@ -107,6 +106,9 @@ def regex_filter(logger:logging.Logger, data:bytes, server_history:bytes, client
 			break
 	return data
 
+# CLIENT ------------> PROXY ------(client_filters)------> SERVER
+
+# CLIENT <------(server_filters)------ PROXY <------------ SERVER
 
 def regex_filter_2(logger:logging.Logger, data:bytes, server_history:bytes, client_history:bytes, id:int) -> bytes:
 	for exclusion in REGEX_MASKS_2:
