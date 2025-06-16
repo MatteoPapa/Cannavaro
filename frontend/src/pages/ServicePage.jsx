@@ -25,7 +25,9 @@ import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import Tooltip from "@mui/material/Tooltip";
 import ShieldIcon from "@mui/icons-material/Shield";
 import CircularProgress from "@mui/material/CircularProgress";
-import ConfirmDialog from "../components/ConfirmDialog"; // Adjust path if needed
+import ConfirmDialog from "../components/ConfirmDialog";
+import SaveIcon from '@mui/icons-material/Save';
+import CachedIcon from '@mui/icons-material/Cached';
 
 function ServicePage() {
   const { name } = useParams();
@@ -219,7 +221,7 @@ function ServicePage() {
   }
 
   return (
-    <Container display="flex" maxWidth="md">
+    <Container display="flex" maxWidth="lg">
       <Box
         sx={{
           display: "flex",
@@ -247,130 +249,193 @@ function ServicePage() {
 
       <ServiceHeader service={service} />
 
-      <Box display={"flex"} justifyContent="center">
-        <Box
-          display={"flex"}
-          width="fit-content"
-          justifyContent="center"
-          flexDirection="column"
-          gap={2}
-        >
-          {restartingDocker || settingProxy ? (
-            <RestartingDocker />
-          ) : (
-            <Button variant="outlined" onClick={handleResetDocker}>
-              <DockerLogo size={25} mr={4} />
-              Restart Full Docker
-            </Button>
-          )}
+      <Divider sx={{ mb: 2 }} />
 
-          <Button
-            variant="outlined"
-            color="success"
-            onClick={() => copyGitClone(service.name, vmIp)}
-          >
-            <GitLogo size={20} mr={5} />
-            Copy Git Clone Command
-          </Button>
-        </Box>
+      <Box display="flex" justifyContent="center" mb={2} gap={2}>
+        {/* Docker Services Main Card */}
+        <Card variant="outlined"
+          sx={{
+            flex: 1,
+            textDecoration: "none",
+            bgcolor: "background.paper",
+            color: "text.primary",
+            transition: "0.3s",
+            borderRadius: 2,
+            "&:hover": {
+              boxShadow: 6,
+            },
+          }}>
+          <CardContent>
+            <Box
+              display={"flex"}
+              width="100%"
+              justifyContent="center"
+              flexDirection="row"
+              gap={2}
+            >
+              {restartingDocker || settingProxy ? (
+                <Button variant="outlined" onClick={handleResetDocker} sx={{ flex: 1 }} disabled>
+                  <CircularProgress size={20} sx={{ mr: 1 }} />
+                  {settingProxy ? "Setting Proxy..." : "Restarting Docker..."}
+                </Button>
+              ) : (
+                <Button variant="outlined" onClick={handleResetDocker} sx={{ flex: 1 }}>
+                  <DockerLogo size={25} mr={4} />
+                  Restart Full Docker
+                </Button>
+              )}
+
+              <Button
+                variant="outlined"
+                color="success"
+                onClick={() => copyGitClone(service.name, vmIp)}
+                sx={{ flex: 1 }}
+              >
+                <GitLogo size={20} mr={5} />
+                Copy Git Clone Command
+              </Button>
+            </Box>
+
+            <Stack spacing={3} width="100%" alignItems="center" mt={4}>
+              {service.services.map((service) => (
+                <Card
+                  key={service.name}
+                  variant="outlined"
+                  sx={{
+                    width: "100%",
+                    maxWidth: 500,
+                    textDecoration: "none",
+                    bgcolor: "background.paper",
+                    color: "text.primary",
+                    transition: "0.3s",
+                    borderRadius: 2,
+                    border: "none",
+                    boxShadow: "6"
+                  }}
+                >
+                  <CardContent fullWidth>
+                    <Box display={"flex"} flexDirection="row" gap={2} fullWidth>
+                      <Box display={"flex"} alignItems="center" justifyContent="center">
+                        <IconButton onClick={() => handleLockToggle(service.name)}>
+                          {lockedServices.has(service.name) ? (
+                            <Tooltip title="The service will not be restarted">
+                              <LockOutlineIcon
+                                fontSize={"large"}
+                                sx={{ color: "red" }}
+                              />
+                            </Tooltip>
+                          ) : (
+                            <Tooltip title="The service will be restarted">
+                              <LockOpenIcon fontSize={"large"} />
+                            </Tooltip>
+                          )}
+                        </IconButton>
+                      </Box>
+                      <Box
+                        display="flex"
+                        flexDirection={"column"}
+                        flexGrow={1}
+                        mb={1}
+                      >
+
+                        {/* Service names and buttons*/}
+                        <Box display="flex" flexDirection="row" alignItems="center" justifyContent="space-between">
+                          <Box display="flex" alignItems="center" gap={1}>
+                            <ElectricalServicesIcon fontSize="medium" color="primary" />
+                            <Typography variant="h6">
+                              {service.name.charAt(0).toUpperCase() +
+                                service.name.slice(1)}
+                            </Typography>
+                          </Box>
+
+                          <Box mr={2}>
+                            <IconButton
+                              onClick={() => handleResetSubservice(service.name)}
+                              disabled={lockedServices.has(service.name)}
+                              color="primary"
+                            >
+                              <Tooltip title="Restart this subservice only">
+                                <RestartAltIcon fontSize={"large"} />
+                              </Tooltip>
+                            </IconButton>
+                            <IconButton
+                              onClick={() => triggerInstallProxy(service.name)}
+                              disabled={lockedServices.has(service.name) || settingProxy}
+                              color="secondary"
+                            >
+                              <Tooltip title="Install proxy on this service">
+                                <ShieldIcon fontSize={"large"} />
+                              </Tooltip>
+                            </IconButton>
+                            {/* <IconButton
+                        onClick={() => handleReloadProxy(name)} // Here we are sending the main service name
+                        disabled={lockedServices.has(service.name)}
+                        color="success"
+                      >
+                        <Tooltip title="Reload proxy on this service">
+                          <RestartAltIcon fontSize={"small"} />
+                        </Tooltip>
+                      </IconButton> */}
+                            {/* Show detailed info */}
+                          </Box>
+                        </Box>
+
+
+                        <DetailsMenu name="Environment" list={service.environment} />
+                        <DetailsMenu name="Mounted Volumes" list={service.volumes} />
+                        <DetailsMenu name="Exposed Ports" list={service.ports} />
+                      </Box>
+
+                    </Box>
+
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+        {/* Proxy Card for future use */}
+        <Card
+          variant="outlined"
+          sx={{
+            flex: 1,
+            textDecoration: "none",
+            bgcolor: "background.paper",
+            color: "text.primary",
+            transition: "0.3s",
+            borderRadius: 2,
+            boxShadow: 6
+          }}>
+          <CardContent>
+            <Box
+              display={"flex"}
+              fullWidth
+              width="100%"
+              justifyContent="center"
+              flexDirection="row"
+              gap={2}
+            >
+
+              <Button variant="outlined" onClick={handleResetDocker} color="customGray" sx={{ flex: 1 }}>
+                <SaveIcon sx={{ mr: 1 }} />
+                Save Changes
+              </Button>
+
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={() => copyGitClone(service.name, vmIp)}
+                sx={{ flex: 1 }}
+              >
+                <CachedIcon sx={{ mr: 1 }} />
+                Reload Proxy
+              </Button>
+            </Box>
+
+          </CardContent>
+        </Card>
       </Box>
 
-      <Typography
-        variant="h6"
-        align="center"
-        sx={{ mt: 4, fontWeight: 600, letterSpacing: 1 }}
-      >
-        All Services:
-      </Typography>
-      <Stack spacing={2} width="100%" alignItems="center" mt={2}>
-        {service.services.map((service) => (
-          <Card
-            key={service.name}
-            variant="outlined"
-            sx={{
-              width: "100%",
-              maxWidth: 500,
-              textDecoration: "none",
-              bgcolor: "background.paper",
-              color: "text.primary",
-              transition: "0.3s",
-              borderRadius: 2,
-              p: 2,
-              "&:hover": {
-                boxShadow: 6,
-              },
-            }}
-          >
-            <CardContent>
-              <Box
-                display="flex"
-                alignItems="center"
-                justifyContent="space-between"
-                mb={1}
-              >
-                {/* Left side: icon + name */}
-                <Box display="flex" alignItems="center" gap={1}>
-                  <ElectricalServicesIcon fontSize="medium" color="primary" />
-                  <Typography variant="h6">
-                    {service.name.charAt(0).toUpperCase() +
-                      service.name.slice(1)}
-                  </Typography>
-                </Box>
-
-                {/* Right side: Lock icon */}
-                <Box mr={2}>
-                  <IconButton onClick={() => handleLockToggle(service.name)}>
-                    {lockedServices.has(service.name) ? (
-                      <Tooltip title="The service will not be restarted">
-                        <LockOutlineIcon
-                          fontSize={"large"}
-                          sx={{ color: "red" }}
-                        />
-                      </Tooltip>
-                    ) : (
-                      <Tooltip title="The service will be restarted">
-                        <LockOpenIcon fontSize={"large"} />
-                      </Tooltip>
-                    )}
-                  </IconButton>
-                  <IconButton
-                    onClick={() => handleResetSubservice(service.name)}
-                    disabled={lockedServices.has(service.name)}
-                    color="primary"
-                  >
-                    <Tooltip title="Restart this subservice only">
-                      <RestartAltIcon fontSize={"large"} />
-                    </Tooltip>
-                  </IconButton>
-                  <IconButton
-                    onClick={() => triggerInstallProxy(service.name)}
-                    disabled={lockedServices.has(service.name) || settingProxy}
-                    color="secondary"
-                  >
-                    <Tooltip title="Install proxy on this service">
-                      <ShieldIcon fontSize={"large"} />
-                    </Tooltip>
-                  </IconButton>
-                  <IconButton
-                    onClick={() => handleReloadProxy(name)} // Here we are sending the main service name
-                    disabled={lockedServices.has(service.name)}
-                    color="success"
-                  >
-                    <Tooltip title="Reload proxy on this service">
-                      <RestartAltIcon fontSize={"small"} />
-                    </Tooltip>
-                  </IconButton>
-                </Box>
-              </Box>
-
-              {/* Show detailed info */}
-              <DetailsMenu name="Environment" list={service.environment} />
-              <DetailsMenu name="Mounted Volumes" list={service.volumes} />
-              <DetailsMenu name="Exposed Ports" list={service.ports} />
-            </CardContent>
-          </Card>
-        ))}
-      </Stack>
       <ConfirmDialog
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}

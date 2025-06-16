@@ -9,6 +9,10 @@ const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: cyan,
+    customGray: {
+      main: '#d1d1d1',
+      contrastText: '#ffffff',
+    },
     background: {
       default: '#121212',
       paper: '#1e1e1e'
