@@ -1,5 +1,5 @@
 local_private_key_file: git_key.pem
-remote_host: host.docker.internal
-remote_port: 2222
+remote_host: 10.254.173.213
+remote_port: 22
 root_user: root
 vm_password: rootpassword

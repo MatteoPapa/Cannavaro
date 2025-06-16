@@ -39,6 +39,10 @@ def setup_ssh_key(ssh, config):
         run_remote_command(ssh, "git config --global user.name \"Root User\"")
         run_remote_command(ssh, "git config --global user.email \"skibidi@palleselvaggie.com\"")
         run_remote_command(ssh, f"git config --global init.defaultBranch \"{DEFAULT_BRANCH}\"")
+        # Add all service folders to Git's safe.directory list
+        for svc in config.get("services", []):
+            service_path = f"/root/{svc['name']}"
+            run_remote_command(ssh, f"git config --global --add safe.directory {service_path}")
     except Exception as e:
         log.error(f"❌ Failed to set Git identity: {e}")
         return

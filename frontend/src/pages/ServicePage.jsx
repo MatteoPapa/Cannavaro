@@ -424,7 +424,7 @@ function ServicePage() {
               <Button
                 variant="outlined"
                 color="secondary"
-                onClick={() => copyGitClone(service.name, vmIp)}
+                onClick={() =>  handleReloadProxy(name)}
                 sx={{ flex: 1 }}
               >
                 <CachedIcon sx={{ mr: 1 }} />

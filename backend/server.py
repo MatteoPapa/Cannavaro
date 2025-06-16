@@ -233,6 +233,8 @@ def reload_proxy():
 
     try:
         log.info(f"Reloading proxy for service: {service}")
+        if not is_proxy_installed(ssh, service):
+            return jsonify({"error": "Proxy not installed for this service"}), 400
         result = reload_proxy_screen(ssh, service)
         return jsonify(result), 200
     except Exception as e:

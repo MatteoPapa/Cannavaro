@@ -3,7 +3,7 @@ import socket, threading
 import os, sys, re
 import logging
 import random, string
-
+import time
 ##############################   CONFIG   ##############################
 
 
@@ -209,7 +209,23 @@ class Proxy2Server(threading.Thread):
 		self.lock = threading.Lock()
 		try:
 			self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			self.server.connect((host, port))
+			#CHANGE: Added more attempts to connect
+			for attempt in range(10):
+				try:
+					self.server.connect((host, port))
+					break
+				except ConnectionRefusedError as e:
+					self.error = f'{e}'
+					self.logger.warning(f'{e} (attempt {attempt+1}/10)')
+					time.sleep(1)
+				except Exception as e:
+					self.error = f'{e}'
+					self.logger.critical(f'{e}')
+					break
+			else:
+				self.logger.critical(f"Failed to connect to target server at {host}:{port} after 10 attempts.")
+				self.server = None
+
 		except ConnectionRefusedError as e:
 			self.error = f'{e}'
 			self.logger.warning(f'{e}')

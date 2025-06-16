@@ -137,13 +137,27 @@ def install_proxy_for_service(ssh, config, parent, subservice):
             os.remove(tmp_path)
 
             log.info(f"✅ Rendered Demon Hill proxy uploaded to {remote_path}")
+            
+            rolling_restart_docker_service(ssh, f"/root/{parent}", [subservice])
+
             screen_name = (f"proxy_{parent}")
-            start_cmd = f"screen -S {screen_name} -dm bash -c 'python3 {remote_path}'"
+            start_cmd = (
+                f"screen -L -Logfile /root/screen_log_{screen_name}.txt "
+                f"-S {screen_name} -dm bash -lic 'python3 {remote_path}'"
+            )
+
             run_remote_command(ssh, start_cmd)
+            
+
+            #Reload the proxy screen three times for good measure
+            # for _ in range(3):
+            #     reload_result = reload_proxy_screen(ssh, parent)
+            #     if not reload_result.get("success"):
+            #         log.error(f"❌ Failed to reload proxy screen: {reload_result.get('error')}")
+
         except Exception as e:
             return {"success": False, "error": f"Script rendered, but upload failed: {e}"}
-
-        return rolling_restart_docker_service(ssh, f"/root/{parent}", [subservice])
+        return {"success": True, "message": f"Proxy installed for {parent} with subservice {subservice}"}
 
     except Exception as e:
         # Restore backup if anything goes wrong
