@@ -19,10 +19,10 @@ import {
           <Typography>{description}</Typography>
         </DialogContent>
         <DialogActions sx={{ justifyContent: "center" }}>
-          <Button onClick={onConfirm} color="success">
-            Confirm
+          <Button onClick={onClose} color="error">Nope</Button>
+          <Button onClick={onConfirm} color="success" variant="contained">
+            YEAH
           </Button>
-          <Button onClick={onClose} color="error">Cancel</Button>
         </DialogActions>
       </Dialog>
     );

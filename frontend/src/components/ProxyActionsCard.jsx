@@ -32,16 +32,21 @@ function ProxyActionsCard({ showAlert, service }) {
   const handleSaveChanges = async () => {
     if (tabIndex == 0) {
       try {
-        const res = await fetch("/api/save_regex", {
+        const response = await fetch("/api/save_proxy_regex", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ service: service.name }),
+          body: JSON.stringify({ service: service.name, regex }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Unknown error");
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || "Failed to save regex");
+        }
+
         showAlert(`Regex for ${service.name} saved successfully.`, "success");
       } catch (err) {
-        showAlert(`Failed to save regex: ${err.message}`, "error");
+        console.error("Save error:", err);
+        showAlert("Error saving regex: " + err.message, "error");
       }
     }
 
@@ -90,6 +95,7 @@ function ProxyActionsCard({ showAlert, service }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ service: service.name }),
       });
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || "Failed to fetch logs");
@@ -99,11 +105,11 @@ function ProxyActionsCard({ showAlert, service }) {
       const fullLog = data.logs || "";
       const lastLength = lastLogLengthRef.current;
 
-      //If logRef is not mounted, wait for it to be ready
       if (!logRef.current) {
-        setTimeout(fetchProxyLogs, 10); // Retry after 100ms
+        setTimeout(fetchProxyLogs, 10);
         return;
       }
+
       if (fullLog.length > lastLength && logRef.current) {
         const newLogChunk = fullLog.slice(lastLength);
         const formattedChunk = ansiConverter.toHtml(
@@ -116,22 +122,31 @@ function ProxyActionsCard({ showAlert, service }) {
       }
     } catch (err) {
       console.error("Error fetching proxy logs:", err);
+      showAlert(`Failed to fetch logs: ${err.message}`, "error");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [service.name]);
+  }, [service.name, showAlert]);
 
   const fetchProxyCode = useCallback(async () => {
-    const response = await fetch("/api/get_proxy_code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ service: service.name }),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch proxy code");
+    try {
+      const response = await fetch("/api/get_proxy_code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service: service.name }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to fetch proxy code");
+      }
+
+      const data = await response.json();
+      setCode(data.code || "");
+    } catch (err) {
+      console.error("Error fetching proxy code:", err);
+      showAlert(`Failed to fetch proxy code: ${err.message}`, "error");
     }
-    const data = await response.json();
-    setCode(data.code || "");
-  }, [service.name]);
+  }, [service.name, showAlert]);
 
   const fetchProxyRegex = useCallback(async () => {
     try {
@@ -149,16 +164,16 @@ function ProxyActionsCard({ showAlert, service }) {
       const data = await response.json();
       setRegex(data.regex || []);
     } catch (err) {
+      console.error("Error fetching proxy regex:", err);
       showAlert(`Failed to fetch regex: ${err.message}`, "error");
     }
-  }, [service.name]);
+  }, [service.name, showAlert]);
 
   useEffect(() => {
-    
     if (tabIndex === 0) {
       fetchProxyRegex();
     }
-    
+
     // Code tab
     if (tabIndex === 1) {
       fetchProxyCode();
@@ -236,7 +251,7 @@ function ProxyActionsCard({ showAlert, service }) {
 
         {/* Tab Panels */}
         <TabPanel value={tabIndex} index={0}>
-          <RegexEditor regex={regex} onChange={setRegex} />
+          <RegexEditor regex={regex} setRegex={setRegex} />
         </TabPanel>
 
         <TabPanel value={tabIndex} index={1}>

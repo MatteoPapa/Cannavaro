@@ -146,7 +146,10 @@ def reset_docker():
         return jsonify({"error": "No services to restart"}), 400
 
     path = f"/root/{parent}"
-    result = (restart_docker_service if not sub else rolling_restart_docker_service)(active_ssh, path, to_restart)
+    if not sub:
+        result = restart_docker_service(active_ssh, parent)
+    else:
+        result = rolling_restart_docker_service(active_ssh, path, to_restart)
 
     if result.get("success"):
         return jsonify({"message": "Services restarted", "restarted": result.get("restarted", [])})
@@ -252,7 +255,27 @@ def save_proxy_code():
         return jsonify({"message": "Code saved successfully"})
     return jsonify({"error": result.get("error")}), 500
 
+@app.route("/api/save_proxy_regex", methods=["POST"])
+def save_proxy_regex():
+    data = request.get_json()
+    service = data.get("service")
+    regex_list = data.get("regex")
 
+    if not service:
+        return jsonify({"error": "Missing 'service' in request"}), 400
+    if not isinstance(regex_list, list):
+        return jsonify({"error": "'regex' must be a list"}), 400
+
+    active_ssh = get_active_ssh()
+    if not active_ssh:
+        return jsonify({"error": "SSH connection not available"}), 500
+
+    result = save_regex(active_ssh, service, regex_list)
+
+    if result.get("success"):
+        return jsonify({"message": result.get("message", "Regex saved successfully")})
+
+    return jsonify({"error": result.get("error")}), 500
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

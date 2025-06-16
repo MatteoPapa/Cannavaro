@@ -1,6 +1,9 @@
 import yaml
 import os
 import posixpath
+import ast
+import tempfile
+import os
 from utils.ssh_utils import run_remote_command
 from utils.services_utils import rolling_restart_docker_service
 from utils.logging_utils import log
@@ -246,9 +249,6 @@ def save_code(ssh, service_name, code):
     except Exception as e:
         return {"success": False, "error": str(e)}
     
-import ast
-import re
-
 def get_regex(ssh, service_name):
     regex_path = f"/root/{service_name}/proxy_{service_name}.py"
     try:
@@ -270,5 +270,61 @@ def get_regex(ssh, service_name):
                                     regex_values.append(elt.s.decode("utf-8"))
 
         return {"success": True, "regex": regex_values}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    
+import re
+import tempfile
+import os
+
+def save_regex(ssh, service_name, new_regex_list):
+    code_path = f"/root/{service_name}/proxy_{service_name}.py"
+
+    try:
+        # Step 1: Read existing code
+        stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
+        code = stdout.read().decode()
+
+        # Step 2: Build new REGEX_MASKS string
+        formatted_items = [f"    {repr(r.encode())}" for r in new_regex_list]
+        new_block = "REGEX_MASKS = [\n" + ",\n".join(formatted_items) + "\n]"
+
+        # Step 3: Replace REGEX_MASKS in the code
+        regex_pattern = r'(?m)^REGEX_MASKS\s*=\s*\[(?:.*?\n)*?\]'
+        new_code, count = re.subn(regex_pattern, new_block, code, flags=re.DOTALL)
+
+        if count == 0:
+            return {"success": False, "error": "REGEX_MASKS not found in file"}
+
+        # Step 4: Validate syntax
+        try:
+            compile(new_code, "<string>", "exec")
+        except SyntaxError as e:
+            return {
+                "success": False,
+                "error": f"Syntax error in code: {e}"
+            }
+        
+        # Step 5: Write to temp file and upload
+        with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
+            tmp.write(new_code)
+            tmp_path = tmp.name
+
+        sftp = ssh.open_sftp()
+        sftp.put(tmp_path, code_path)
+        sftp.chmod(code_path, 0o755)
+        sftp.close()
+        os.remove(tmp_path)
+
+        # Step 6: Git commit
+        commit_msg = "Update REGEX_MASKS"
+        run_remote_command(ssh, f"""
+            cd /root/{service_name} && \
+            git add {os.path.basename(code_path)} && \
+            git commit -m '{commit_msg}'
+        """)
+
+        return {"success": True, "message": "Regex updated and committed successfully"}
+
     except Exception as e:
         return {"success": False, "error": str(e)}

@@ -70,14 +70,9 @@ if __name__ == '__main__':
 
 ##############################   UTILS   ##############################
 
-
-def random_flag(length:int=FLAG_LEN-1):
-	return "".join(random.choices(string.ascii_uppercase + string.digits, k=length)) + "="
-
-
 def replace_flag(logger: logging.Logger, data: bytes, id: int) -> bytes:
 	def callback(match_obj):
-		new_flag = random_flag()
+		new_flag = "GRAZIEDARIOGRAZIEDARIO"
 		logger.warning(f"{match_obj.group().decode()} -> {new_flag}")
 		return new_flag.encode()
 
