@@ -245,3 +245,30 @@ def save_code(ssh, service_name, code):
 
     except Exception as e:
         return {"success": False, "error": str(e)}
+    
+import ast
+import re
+
+def get_regex(ssh, service_name):
+    regex_path = f"/root/{service_name}/proxy_{service_name}.py"
+    try:
+        stdin, stdout, stderr = ssh.exec_command(f"cat {regex_path}")
+        code = stdout.read().decode()
+
+        # Parse the full file into AST
+        tree = ast.parse(code)
+
+        regex_values = []
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "REGEX_MASKS":
+                        if isinstance(node.value, ast.List):
+                            for elt in node.value.elts:
+                                if isinstance(elt, ast.Bytes):
+                                    regex_values.append(elt.s.decode("utf-8"))
+
+        return {"success": True, "regex": regex_values}
+    except Exception as e:
+        return {"success": False, "error": str(e)}

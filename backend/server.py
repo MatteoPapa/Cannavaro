@@ -178,27 +178,64 @@ def reload_proxy():
     result = reload_proxy_screen(active_ssh, service)
     return jsonify(result)
 
+
 @app.route("/api/get_proxy_logs", methods=["POST"])
 def get_proxy_logs():
     data = request.get_json()
+
     service = data.get("service")
+    if not service:
+        return jsonify({"error": "Missing 'service' in request"}), 400
+
     active_ssh = get_active_ssh()
+    if not active_ssh:
+        return jsonify({"error": "SSH connection not available"}), 500
 
     result = get_logs(active_ssh, service)
+
     if result.get("success"):
         return jsonify({"logs": result["logs"]})
+
     return jsonify({"error": result.get("error")}), 500
 
 @app.route("/api/get_proxy_code", methods=["POST"])
 def get_proxy_code():
     data = request.get_json()
+
     service = data.get("service")
+    if not service:
+        return jsonify({"error": "Missing 'service' in request"}), 400
+
     active_ssh = get_active_ssh()
+    if not active_ssh:
+        return jsonify({"error": "SSH connection not available"}), 500
 
     result = get_code(active_ssh, service)
+
     if result.get("success"):
         return jsonify({"code": result["code"]})
+
     return jsonify({"error": result.get("error")}), 500
+
+@app.route("/api/get_proxy_regex", methods=["POST"])
+def get_proxy_regex():
+    data = request.get_json()
+    service = data.get("service")
+
+    if not service:
+        return jsonify({"error": "Missing 'service' in request"}), 400
+
+    active_ssh = get_active_ssh()
+    if not active_ssh:
+        return jsonify({"error": "SSH connection not available"}), 500
+
+    result = get_regex(active_ssh, service)
+
+    if result.get("success"):
+        return jsonify({"regex": result["regex"]})
+
+    return jsonify({"error": result.get("error")}), 500
+
 
 @app.route("/api/save_proxy_code", methods=["POST"])
 def save_proxy_code():
@@ -214,6 +251,8 @@ def save_proxy_code():
     if result.get("success"):
         return jsonify({"message": "Code saved successfully"})
     return jsonify({"error": result.get("error")}), 500
+
+
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

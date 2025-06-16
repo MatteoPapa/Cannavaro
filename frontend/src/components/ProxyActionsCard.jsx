@@ -22,6 +22,7 @@ function TabPanel({ children, value, index }) {
 function ProxyActionsCard({ showAlert, service }) {
   const [tabIndex, setTabIndex] = useState(0);
   const [code, setCode] = useState(``);
+  const [regex, setRegex] = useState([]);
 
   const logRef = useRef(null);
   const intervalRef = useRef(null);
@@ -44,7 +45,7 @@ function ProxyActionsCard({ showAlert, service }) {
       }
     }
 
-    if (tabIndex == 1){
+    if (tabIndex == 1) {
       try {
         const res = await fetch("/api/save_proxy_code", {
           method: "POST",
@@ -55,7 +56,10 @@ function ProxyActionsCard({ showAlert, service }) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Unknown error");
 
-        showAlert(`Proxy code for ${service.name} saved successfully.`, "success");
+        showAlert(
+          `Proxy code for ${service.name} saved successfully.`,
+          "success"
+        );
       } catch (err) {
         showAlert(`Failed to save proxy code: ${err.message}`, "error");
       }
@@ -127,13 +131,37 @@ function ProxyActionsCard({ showAlert, service }) {
     }
     const data = await response.json();
     setCode(data.code || "");
+  }, [service.name]);
 
+  const fetchProxyRegex = useCallback(async () => {
+    try {
+      const response = await fetch("/api/get_proxy_regex", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service: service.name }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to fetch regex");
+      }
+
+      const data = await response.json();
+      setRegex(data.regex || []);
+    } catch (err) {
+      showAlert(`Failed to fetch regex: ${err.message}`, "error");
+    }
   }, [service.name]);
 
   useEffect(() => {
+    
+    if (tabIndex === 0) {
+      fetchProxyRegex();
+    }
+    
     // Code tab
     if (tabIndex === 1) {
-      fetchProxyCode()
+      fetchProxyCode();
     }
 
     let interval;
@@ -144,7 +172,7 @@ function ProxyActionsCard({ showAlert, service }) {
         logRef.current.innerHTML = "";
       }
 
-      fetchProxyLogs()
+      fetchProxyLogs();
 
       interval = setInterval(fetchProxyLogs, 5000);
       intervalRef.current = interval;
@@ -156,7 +184,7 @@ function ProxyActionsCard({ showAlert, service }) {
         intervalRef.current = null;
       }
     };
-  }, [tabIndex, fetchProxyLogs, fetchProxyCode, service.name]);
+  }, [tabIndex, fetchProxyLogs, fetchProxyCode, fetchProxyRegex, service.name]);
 
   return (
     <Card
@@ -208,7 +236,7 @@ function ProxyActionsCard({ showAlert, service }) {
 
         {/* Tab Panels */}
         <TabPanel value={tabIndex} index={0}>
-          <RegexEditor />
+          <RegexEditor regex={regex} onChange={setRegex} />
         </TabPanel>
 
         <TabPanel value={tabIndex} index={1}>
@@ -228,21 +256,21 @@ function ProxyActionsCard({ showAlert, service }) {
         </TabPanel>
 
         <TabPanel value={tabIndex} index={2}>
-            <Box
-              ref={logRef}
-              sx={{
-                fontFamily: "monospace",
-                backgroundColor: "#111",
-                color: "#eee",
-                padding: 2,
-                borderRadius: 1,
-                height: "700px",
-                overflowY: "auto",
-                lineHeight: 1.6,
-                textAlign: "left",
-                fontSize: "0.9rem",
-              }}
-            />
+          <Box
+            ref={logRef}
+            sx={{
+              fontFamily: "monospace",
+              backgroundColor: "#111",
+              color: "#eee",
+              padding: 2,
+              borderRadius: 1,
+              height: "700px",
+              overflowY: "auto",
+              lineHeight: 1.6,
+              textAlign: "left",
+              fontSize: "0.9rem",
+            }}
+          />
         </TabPanel>
       </CardContent>
     </Card>

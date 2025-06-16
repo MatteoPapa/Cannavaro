@@ -256,27 +256,22 @@ function ServicePage() {
 
             <Box display="flex" flexWrap="wrap" gap={2} mt={4}>
               {service.services.map((svc) => (
-                <>
-                  <Box key={svc.name} flex={0.5}>
-                    <SubserviceCard
-                      service={svc}
-                      isLocked={lockedServices.has(svc.name)}
-                      onToggleLock={handleLockToggle}
-                      onRestart={handleResetSubservice}
-                      onInstallProxy={triggerInstallProxy}
-                      isInstallingProxy={settingProxy}
-                    />
-                  </Box>
-                </>
+                <Box key={svc.name} flex={0.5}>
+                  <SubserviceCard
+                    service={svc}
+                    isLocked={lockedServices.has(svc.name)}
+                    onToggleLock={handleLockToggle}
+                    onRestart={handleResetSubservice}
+                    onInstallProxy={triggerInstallProxy}
+                    isInstallingProxy={settingProxy}
+                  />
+                </Box>
               ))}
             </Box>
           </CardContent>
         </Card>
 
-        <ProxyActionsCard
-          showAlert={showAlert}
-          service={service}
-        />
+        <ProxyActionsCard showAlert={showAlert} service={service} />
       </Box>
 
       <ConfirmDialog
