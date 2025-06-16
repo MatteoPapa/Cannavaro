@@ -6,24 +6,37 @@ import {
   Button,
   Tabs,
   Tab,
-  Typography,
 } from "@mui/material";
 import SaveIcon from "@mui/icons-material/Save";
 import CachedIcon from "@mui/icons-material/Cached";
 import RegexEditor from "./RegexEditor";
 
+import Editor from "@monaco-editor/react";
+
 function TabPanel({ children, value, index }) {
   return value === index ? (
     <Box mt={2}>
-      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-        {children}
-      </Typography>
+      {children}
     </Box>
   ) : null;
 }
 
 function ProxyActionsCard({ onSave, onReload }) {
   const [tabIndex, setTabIndex] = useState(0);
+  const [code, setCode] = useState(`import socket
+
+def handle_connection(conn):
+    data = conn.recv(1024)
+    print("Received:", data)
+    conn.sendall(b'Hello back!')
+
+s = socket.socket()
+s.bind(('0.0.0.0', 8080))
+s.listen(5)
+while True:
+    conn, addr = s.accept()
+    handle_connection(conn)
+    conn.close()`);
 
   return (
     <Card
@@ -69,11 +82,23 @@ function ProxyActionsCard({ onSave, onReload }) {
         </Tabs>
 
         <TabPanel value={tabIndex} index={0}>
-          <RegexEditor/>
+          <RegexEditor />
         </TabPanel>
 
         <TabPanel value={tabIndex} index={1}>
-
+          <Editor
+            height="400px"
+            defaultLanguage="python"
+            theme="vs-dark"
+            value={code}
+            onChange={(value) => setCode(value)}
+            options={{
+              fontSize: 12,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              wordWrap: 'on',
+            }}
+          />
         </TabPanel>
       </CardContent>
     </Card>

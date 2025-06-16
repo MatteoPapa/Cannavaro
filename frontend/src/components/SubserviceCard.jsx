@@ -35,17 +35,19 @@ function SubserviceCard({
     >
       <CardContent>
         <Box display="flex" gap={2}>
-          <IconButton onClick={() => onToggleLock(service.name)}>
-            {isLocked ? (
-              <Tooltip title="The service will not be restarted">
-                <LockOutlineIcon fontSize="large" sx={{ color: "red" }} />
-              </Tooltip>
-            ) : (
-              <Tooltip title="The service will be restarted">
-                <LockOpenIcon fontSize="large" />
-              </Tooltip>
-            )}
-          </IconButton>
+          <Box  display="flex" alignItems="center" justifyContent="center">
+            <IconButton onClick={() => onToggleLock(service.name)}>
+              {isLocked ? (
+                <Tooltip title="The service will not be restarted">
+                  <LockOutlineIcon fontSize="large" sx={{ color: "red" }} />
+                </Tooltip>
+              ) : (
+                <Tooltip title="The service will be restarted">
+                  <LockOpenIcon fontSize="large" />
+                </Tooltip>
+              )}
+            </IconButton>
+          </Box>
 
           <Box flexGrow={1}>
             <Box display="flex" justifyContent="space-between" alignItems="center">
