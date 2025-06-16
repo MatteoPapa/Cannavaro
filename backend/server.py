@@ -200,6 +200,21 @@ def get_proxy_code():
         return jsonify({"code": result["code"]})
     return jsonify({"error": result.get("error")}), 500
 
+@app.route("/api/save_proxy_code", methods=["POST"])
+def save_proxy_code():
+    data = request.get_json()
+    service = data.get("service")
+    code = data.get("code")
+    active_ssh = get_active_ssh()
+
+    if not code:
+        return jsonify({"error": "No code provided"}), 400
+
+    result = save_code(active_ssh, service, code)
+    if result.get("success"):
+        return jsonify({"message": "Code saved successfully"})
+    return jsonify({"error": result.get("error")}), 500
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve_react(path):

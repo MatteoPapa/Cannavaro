@@ -205,3 +205,43 @@ def get_code(ssh, service_name):
         return {"success": True, "code": code}
     except Exception as e:
         return {"success": False, "error": str(e)}
+    
+def save_code(ssh, service_name, code):
+    code_path = f"/root/{service_name}/proxy_{service_name}.py"
+
+    # Step 1: Validate syntax locally
+    try:
+        compile(code, "<string>", "exec")
+    except SyntaxError as e:
+        return {
+            "success": False,
+            "error": f"Syntax error in code: {e}"
+        }
+
+    try:
+        # Step 2: Write code to remote file
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
+            tmp.write(code)
+            tmp_path = tmp.name
+
+        sftp = ssh.open_sftp()
+        sftp.put(tmp_path, code_path)
+        sftp.chmod(code_path, 0o755)
+        sftp.close()
+        os.remove(tmp_path)
+
+        # Step 3: Git commit
+        commit_msg = "Update proxy code"
+        run_remote_command(ssh, f"""
+            cd /root/{service_name} && \
+            git add {os.path.basename(code_path)} && \
+            git commit -m '{commit_msg}'
+        """)
+
+        return {"success": True, "message": "Code saved and committed successfully"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}

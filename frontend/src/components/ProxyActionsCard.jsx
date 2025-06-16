@@ -19,7 +19,7 @@ function TabPanel({ children, value, index }) {
   return value === index ? <Box mt={2}>{children}</Box> : null;
 }
 
-function ProxyActionsCard({ onSave, onReload, service }) {
+function ProxyActionsCard({ showAlert, service }) {
   const [tabIndex, setTabIndex] = useState(0);
   const [code, setCode] = useState(``);
 
@@ -27,6 +27,57 @@ function ProxyActionsCard({ onSave, onReload, service }) {
   const intervalRef = useRef(null);
   const ansiConverter = new AnsiToHtml();
   const lastLogLengthRef = useRef(0);
+
+  const handleSaveChanges = async () => {
+    if (tabIndex == 0) {
+      try {
+        const res = await fetch("/api/save_regex", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ service: service.name }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Unknown error");
+        showAlert(`Regex for ${service.name} saved successfully.`, "success");
+      } catch (err) {
+        showAlert(`Failed to save regex: ${err.message}`, "error");
+      }
+    }
+
+    if (tabIndex == 1){
+      try {
+        const res = await fetch("/api/save_proxy_code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ service: service.name, code }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Unknown error");
+
+        showAlert(`Proxy code for ${service.name} saved successfully.`, "success");
+      } catch (err) {
+        showAlert(`Failed to save proxy code: ${err.message}`, "error");
+      }
+    }
+  };
+
+  const handleReloadProxy = async () => {
+    try {
+      const res = await fetch("/api/reload_proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service: service.name }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Unknown error");
+
+      showAlert(`Proxy for ${service.name} reloaded successfully.`, "success");
+    } catch (err) {
+      showAlert(`Failed to reload proxy: ${err.message}`, "error");
+    }
+  };
 
   const fetchProxyLogs = useCallback(async () => {
     try {
@@ -124,7 +175,7 @@ function ProxyActionsCard({ onSave, onReload, service }) {
         <Box display="flex" width="100%" gap={2} mb={2}>
           <Button
             variant="outlined"
-            onClick={onSave}
+            onClick={handleSaveChanges}
             color="customGray"
             sx={{ flex: 1 }}
           >
@@ -134,7 +185,7 @@ function ProxyActionsCard({ onSave, onReload, service }) {
           <Button
             variant="outlined"
             color="secondary"
-            onClick={onReload}
+            onClick={handleReloadProxy}
             sx={{ flex: 1 }}
           >
             <CachedIcon sx={{ mr: 1 }} />

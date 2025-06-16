@@ -4,8 +4,8 @@ import os, sys, re
 import logging
 import random, string
 import time
-##############################   CONFIG   ##############################
 
+##############################   CONFIG   ##############################
 
 LOG_LEVEL = 'info'
 
@@ -20,6 +20,7 @@ FLAG_LEN = 32
 FLAG_REGEX = rb'[A-Z0-9]{31}='
 
 REGEX_MASKS = [
+	rb'[A-Z0-9]{31}='
 ]
 
 REGEX_MASKS_2 = [
@@ -106,9 +107,6 @@ def regex_filter(logger:logging.Logger, data:bytes, server_history:bytes, client
 			break
 	return data
 
-# CLIENT ------------> PROXY ------(client_filters)------> SERVER
-
-# CLIENT <------(server_filters)------ PROXY <------------ SERVER
 
 def regex_filter_2(logger:logging.Logger, data:bytes, server_history:bytes, client_history:bytes, id:int) -> bytes:
 	for exclusion in REGEX_MASKS_2:
@@ -121,12 +119,17 @@ def regex_filter_2(logger:logging.Logger, data:bytes, server_history:bytes, clie
 				break
 	return data
 
+
 SERVER_FILTERS = [
 	regex_filter,
 ]
 
 CLIENT_FILTERS = [
 ]
+
+# CLIENT ------------> PROXY ------(client_filters)------> SERVER
+
+# CLIENT <------(server_filters)------ PROXY <------------ SERVER
 
 ##############################   LOGGER   ##############################
 

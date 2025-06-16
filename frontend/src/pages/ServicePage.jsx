@@ -198,23 +198,6 @@ function ServicePage() {
     }
   };
 
-  const handleReloadProxy = async (subservice) => {
-    try {
-      const res = await fetch("/api/reload_proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service: subservice }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unknown error");
-
-      showAlert(`Proxy for ${subservice} reloaded successfully.`, "success");
-    } catch (err) {
-      showAlert(`Failed to reload proxy: ${err.message}`, "error");
-    }
-  };
-
   if (!service) {
     return (
       <Container display="flex">
@@ -291,8 +274,7 @@ function ServicePage() {
         </Card>
 
         <ProxyActionsCard
-          onSave={handleResetDocker}
-          onReload={() => handleReloadProxy(name)}
+          showAlert={showAlert}
           service={service}
         />
       </Box>
