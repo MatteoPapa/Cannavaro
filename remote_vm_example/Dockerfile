@@ -22,6 +22,7 @@ COPY Notes /root/Notes
 COPY Pwnzer0tt1Shop /root/Pwnzer0tt1Shop
 COPY PCSS /root/PCSS
 COPY Mudarabah /root/Mudarabah
+COPY CheesyCheats /root/CheesyCheats
 
 # Expose SSH port
 EXPOSE 2222

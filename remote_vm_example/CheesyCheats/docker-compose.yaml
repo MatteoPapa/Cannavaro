@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  cheats_manager:
+    build: manager
+    environment:
+      - API_HOST=cheats_api:5555
+      - DB_SECRET=ABCDEF1234567890ABCDEF1234567890
+      - TOKEN_KEY=12345678ABCDEF90
+    ports:
+      - 5000:5000
+    restart: unless-stopped
+
+  cheats_api:
+    build: api
+    ports:
+      - 5555:5555
+    environment:
+      - API_HOST=cheats_api:5555
+      - DB_SECRET=ABCDEF1234567890ABCDEF1234567890
+      - TOKEN_KEY=12345678ABCDEF90
+    restart: unless-stopped

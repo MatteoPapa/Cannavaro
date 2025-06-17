@@ -42,12 +42,24 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
     for path in compose_paths:
         folder_path = os.path.dirname(path)
         folder_name = os.path.basename(folder_path)
+
+        # 👇 Skip any folder named "pcaps"
+        if folder_name.lower() == "pcaps":
+            log.info(f"Skipping service folder '{folder_name}'")
+            continue
+
         stdin, stdout, stderr = ssh.exec_command(f"cat {path}")
         compose_content = stdout.read().decode()
 
         service_obj = {"name": folder_name}
 
-        # Step: Check for proxy file
+        # 👇 Check for TLS (.pem files)
+        pem_check_cmd = f"find {folder_path} -type f -name '*.pem' | head -n 1"
+        stdin, stdout, stderr = ssh.exec_command(pem_check_cmd)
+        pem_result = stdout.read().decode().strip()
+        service_obj["tls"] = bool(pem_result)
+
+        # Check for proxy file
         proxy_filename = f"proxy_{folder_name}.py"
         log.info(f"Checking for proxy file: {proxy_filename} in {folder_path}")
         check_cmd = f"test -f {folder_path}/{proxy_filename}"
@@ -116,6 +128,7 @@ def save_services_to_yaml(services, path):
             "name": s.get("name"),
             "port": s.get("port", None),
             "proxied": s.get("proxied", False),
+            "tls": s.get("tls", False),
         }
 
         if "services" in s:

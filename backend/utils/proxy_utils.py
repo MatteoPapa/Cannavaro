@@ -177,9 +177,8 @@ def reload_proxy_screen(ssh, service_name):
     
     # Send reload signal
     cmd = f"screen -S {screen_name} -X stuff 'r\\n'"
-    #Twice for good measure
     run_remote_command(ssh, cmd)
-    run_remote_command(ssh, cmd)
+
     return {"success": True, "message": f"Reload signal sent to proxy {screen_name}"}
 
 def get_logs(ssh, service_name):
@@ -190,48 +189,76 @@ def get_logs(ssh, service_name):
         return {"success": True, "logs": logs}
     except Exception as e:
         return {"success": False, "error": str(e)}
-    
-def get_code(ssh, service_name):        
+
+logger_marker = "#PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE"
+
+
+def get_code(ssh, service_name):
+    """
+    Extract the editable portions of the proxy code between placeholder markers.
+    """
     code_path = f"/root/{service_name}/proxy_{service_name}.py"
     try:
         stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
         full_code = stdout.read().decode()
 
-        # Slice before LOGGER section
-        logger_marker = "##############################   LOGGER   ##############################"
-        code = full_code.split(logger_marker)[0]
+        # Split by markers
+        parts = full_code.split(logger_marker)
+        if len(parts) < 4:
+            return {"success": False, "error": "Code format error: Not enough marker sections"}
+
+        # Extract modifiable blocks (settings and filters)
+        settings_block = parts[1].strip()
+        filters_block = parts[3].strip()
+
+        # Combine them for editing
+        code = f"{settings_block}\n{logger_marker}\n{filters_block}"
 
         return {"success": True, "code": code}
+
     except Exception as e:
         return {"success": False, "error": str(e)}
-    
+
+
 def save_code(ssh, service_name, new_partial_code):
+    """
+    Replace the editable portions of the proxy code using new content.
+    """
     code_path = f"/root/{service_name}/proxy_{service_name}.py"
 
     try:
-        # Fetch full current code
+        # Read full original code
         stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
         full_code = stdout.read().decode()
 
-        # Split at LOGGER marker
-        logger_marker = "##############################   LOGGER   ##############################"
-        parts = full_code.split(logger_marker, 1)
-        if len(parts) < 2:
-            return {"success": False, "error": "LOGGER marker not found in the existing script."}
+        parts = full_code.split(logger_marker)
+        if len(parts) < 4:
+            return {"success": False, "error": "Original code is missing expected marker sections"}
 
-        # Reconstruct full script with updated top part
-        updated_code = new_partial_code.rstrip() + "\n\n" + logger_marker + parts[1]
+        # Parse new editable sections
+        new_parts = new_partial_code.split(logger_marker)
+        if len(new_parts) < 2:
+            return {"success": False, "error": "New code must contain both sections separated by the marker"}
 
-        # Validate syntax
+        new_settings = new_parts[0].strip()
+        new_filters = new_parts[1].strip()
+
+        # Reconstruct full code
+        updated_code = (
+            f"{parts[0].rstrip()}\n{logger_marker}\n"
+            f"{new_settings}\n{logger_marker}\n"
+            f"{parts[2].strip()}\n{logger_marker}\n"
+            f"{new_filters}\n{logger_marker}\n"
+            f"{parts[4].lstrip()}"
+        )
+
+        # Validate code syntax
         try:
             compile(updated_code, "<string>", "exec")
         except SyntaxError as e:
-            return {
-                "success": False,
-                "error": f"Syntax error in code: {e}"
-            }
+            return {"success": False, "error": f"Syntax error in updated code: {e}"}
 
-        # Upload back to remote
+        # Upload to remote
         with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
             tmp.write(updated_code)
             tmp_path = tmp.name
@@ -254,6 +281,7 @@ def save_code(ssh, service_name, new_partial_code):
 
     except Exception as e:
         return {"success": False, "error": str(e)}
+
 
 def get_regex(ssh, service_name):
     regex_path = f"/root/{service_name}/proxy_{service_name}.py"

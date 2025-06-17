@@ -38,7 +38,9 @@ def ensure_remote_dependencies(ssh):
 
         commands = [
             "apt-get update -y",
-            "apt-get install -y zip rsync git screen",
+            "apt-get install -y zip rsync git screen python3-pip",
+            # "python3 -m pip install --upgrade pip",
+            "python3 -m pip install requests scapy",
         ]
 
         for cmd in commands:

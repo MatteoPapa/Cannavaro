@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package cheesycheatsApi;
+
+
+service Database { //DB
+    rpc Get (GetRequest) returns (Result);
+    rpc Put (PutRequest) returns (Result);
+    rpc Update (UpdateRequest) returns (Result);
+    rpc Delete (DeleteRequest) returns (Result);
+}
+
+message GetRequest {
+  string id = 1;
+}
+
+message PutRequest {
+    string id = 1;
+    Entry entry = 2;
+}
+
+message UpdateRequest {
+    string id = 1;
+    Entry entry = 2;
+}
+
+message DeleteRequest {
+    string id = 1;
+}
+
+message Result {
+    int32 status_code = 1;
+    string status = 2;
+    optional Entry entry = 3 ;
+}
+
+message Entry {
+    optional string id = 1;
+    optional string value = 2;
+    repeated string values = 3;
+  }
+
+service Api { //DB
+    rpc Redeem (RedeemRequest) returns (RedeemReply);
+    rpc Run (RunRequest) returns (RunReply);
+}
+
+message RedeemRequest{
+    string id = 1;
+
+}
+message RedeemReply{
+    bool status = 1;
+    optional Cheat cheat = 2;
+}
+
+message RunRequest{
+    string id = 1;
+    string STDIN = 2;
+}
+message RunReply{
+    bool status = 1;
+    optional string STDOUT = 2;
+}
+
+message Cheat{
+    string id = 1;
+    string name = 2;
+    string code = 3;
+}

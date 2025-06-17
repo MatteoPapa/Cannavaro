@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package cheesycheats;
+
+service Manager {
+  rpc Register (RegistrationRequest) returns (RegistrationReply);
+  rpc LoginStep1 (LoginStep1Request) returns (LoginStep1Reply);
+  rpc LoginStep2 (LoginStep2Request) returns (LoginStep2Reply);
+  rpc ListOwnCheats (ListRequest) returns (CheatListReply);
+  rpc SellCheat (SellCheatRequest) returns (SellCheatReply);
+  rpc BuyCheat (BuyCheatRequest) returns (BuyCheatReply);
+  rpc GetCheatInfo (GetCheatInfoRequest) returns (GetCheatInfoReply);
+}
+
+message RegistrationRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message RegistrationReply {
+  bool status = 1;
+}
+
+message LoginStep1Request {
+  string username = 1;
+  string g_a = 2;
+}
+
+message LoginStep1Reply {
+  bool status = 1;
+  optional string g_b = 2;
+}
+
+message LoginStep2Request {
+  string username = 1;
+  string K = 2;
+}
+
+message LoginStep2Reply {
+  bool status = 1;
+  optional string session = 2;
+}
+
+message ListRequest {
+
+}
+
+message CheatListReply {
+  bool status = 1;
+  repeated Cheat cheats = 2;
+}
+
+message SellCheatRequest{
+  string title = 1;
+  Cheat cheat = 2;
+
+}
+
+message SellCheatReply{
+  bool status = 1;
+  string id = 2;
+}
+
+message BuyCheatRequest{
+  string cheat_id = 1;
+  string preimage = 2;
+}
+
+message BuyCheatReply{
+  bool status = 1;
+}
+
+message GetCheatInfoRequest{
+  string cheat_id = 1;
+}
+
+message GetCheatInfoReply{
+  bool status = 1;
+  optional string title = 2;
+  optional string body = 3;
+  optional string prefix = 4;
+  optional string target = 5; 
+}
+
+message Cheat{
+  optional string id = 1;
+  string title = 2;
+  optional string body = 3;
+  string prefix = 4;
+  string target = 5;
+  repeated string preimages = 6;
+}
+
