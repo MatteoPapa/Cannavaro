@@ -29,8 +29,12 @@ function ProxyActionsCard({ showAlert, service }) {
   const ansiConverter = new AnsiToHtml();
   const lastLogLengthRef = useRef(0);
 
+  const refetchCodeFromServer = useRef(true);
+
   const handleSaveChanges = async () => {
-    if (tabIndex == 0) {
+    refetchCodeFromServer.current = false;
+
+    if (tabIndex === 0) {
       try {
         const response = await fetch("/api/save_proxy_regex", {
           method: "POST",
@@ -39,18 +43,16 @@ function ProxyActionsCard({ showAlert, service }) {
         });
 
         const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to save regex");
-        }
+        if (!response.ok) throw new Error(data.error || "Failed to save regex");
 
         showAlert(`Regex for ${service.name} saved successfully.`, "success");
+        refetchCodeFromServer.current = true;
       } catch (err) {
-        console.error("Save error:", err);
         showAlert("Error saving regex: " + err.message, "error");
       }
     }
 
-    if (tabIndex == 1) {
+    if (tabIndex === 1) {
       try {
         const res = await fetch("/api/save_proxy_code", {
           method: "POST",
@@ -65,8 +67,10 @@ function ProxyActionsCard({ showAlert, service }) {
           `Proxy code for ${service.name} saved successfully.`,
           "success"
         );
+        refetchCodeFromServer.current = true;
       } catch (err) {
         showAlert(`Failed to save proxy code: ${err.message}`, "error");
+        refetchCodeFromServer.current = false;
       }
     }
   };
@@ -176,7 +180,12 @@ function ProxyActionsCard({ showAlert, service }) {
 
     // Code tab
     if (tabIndex === 1) {
-      fetchProxyCode();
+      if (refetchCodeFromServer.current) {
+        fetchProxyCode();
+      }
+    }
+    else {
+      refetchCodeFromServer.current = true;
     }
 
     let interval;

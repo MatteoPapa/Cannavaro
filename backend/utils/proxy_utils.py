@@ -66,27 +66,24 @@ def install_proxy_for_service(ssh, config, parent, subservice):
         updated_ports = []
 
         for port in ports:
-            if isinstance(port, int):  # Rare case: raw number
-                from_port = port - 1
-                updated_ports.append(f"{from_port}:{port}")
-                continue
-
-            parts = port.split(":")
-
-            if len(parts) == 2:
-                # "3000:3000" → host:container
-                host, container = parts
-                from_port = str(int(host) + 6)
-                updated_ports.append(f"{from_port}:{container}")
-
-            elif len(parts) == 3:
-                # "0.0.0.0:3000:3000" → ip:host:container
-                ip, host, container = parts
-                from_port = str(int(host) + 6)
-                updated_ports.append(f"{ip}:{from_port}:{container}")
-
+            if isinstance(port, int):
+                # Treat raw port as host and container (common for symmetric ports)
+                host_port = container_port = port
             else:
-                return {"success": False, "error": f"Unrecognized port format: '{port}'"}
+                parts = port.split(":")
+                if len(parts) == 2:
+                    # "host:container"
+                    host_port, container_port = parts
+                elif len(parts) == 3:
+                    # "ip:host:container"
+                    _, host_port, container_port = parts
+                else:
+                    return {"success": False, "error": f"Unrecognized port format: '{port}'"}
+
+            host_port = int(host_port)
+            container_port = int(container_port)
+            new_host_port = host_port + 6
+            updated_ports.append(f"127.0.0.1:{new_host_port}:{container_port}")
 
 
         service_def["ports"] = updated_ports
@@ -105,7 +102,7 @@ def install_proxy_for_service(ssh, config, parent, subservice):
         """)
         
          # Determine FROM and TO port
-        original_port = int(host)
+        original_port = int(host_port)
         adjusted_port = original_port + 6
 
         # Determine TARGET_IP from config
