@@ -185,7 +185,6 @@ def reload_proxy():
     result = reload_proxy_screen(active_ssh, service)
     return jsonify(result)
 
-
 @app.route("/api/get_proxy_logs", methods=["POST"])
 def get_proxy_logs():
     data = request.get_json()
@@ -242,7 +241,6 @@ def get_proxy_regex():
         return jsonify({"regex": result["regex"]})
 
     return jsonify({"error": result.get("error")}), 500
-
 
 @app.route("/api/save_proxy_code", methods=["POST"])
 def save_proxy_code():
