@@ -2,6 +2,7 @@ import yaml
 import os
 import posixpath
 import ast
+import re
 import tempfile
 import os
 from utils.ssh_utils import run_remote_command
@@ -75,13 +76,13 @@ def install_proxy_for_service(ssh, config, parent, subservice):
             if len(parts) == 2:
                 # "3000:3000" → host:container
                 host, container = parts
-                from_port = str(int(host) - 1)
+                from_port = str(int(host) + 6)
                 updated_ports.append(f"{from_port}:{container}")
 
             elif len(parts) == 3:
                 # "0.0.0.0:3000:3000" → ip:host:container
                 ip, host, container = parts
-                from_port = str(int(host) - 1)
+                from_port = str(int(host) + 6)
                 updated_ports.append(f"{ip}:{from_port}:{container}")
 
             else:
@@ -105,7 +106,7 @@ def install_proxy_for_service(ssh, config, parent, subservice):
         
          # Determine FROM and TO port
         original_port = int(host)
-        adjusted_port = original_port - 1
+        adjusted_port = original_port + 6
 
         # Determine TARGET_IP from config
         remote_host = config.get("remote_host", "")
@@ -156,13 +157,6 @@ def install_proxy_for_service(ssh, config, parent, subservice):
                 git add {os.path.basename(compose_path)} {proxy_filename} && \
                 git commit -m '{commit_msg} + added proxy script'
             """)
-
-
-            #Reload the proxy screen three times for good measure
-            # for _ in range(3):
-            #     reload_result = reload_proxy_screen(ssh, parent)
-            #     if not reload_result.get("success"):
-            #         log.error(f"❌ Failed to reload proxy screen: {reload_result.get('error')}")
 
         except Exception as e:
             return {"success": False, "error": f"Script rendered, but upload failed: {e}"}
@@ -273,10 +267,6 @@ def get_regex(ssh, service_name):
     except Exception as e:
         return {"success": False, "error": str(e)}
     
-import re
-import tempfile
-import os
-
 def save_regex(ssh, service_name, new_regex_list):
     code_path = f"/root/{service_name}/proxy_{service_name}.py"
 

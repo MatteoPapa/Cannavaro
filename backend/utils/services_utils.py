@@ -32,17 +32,29 @@ def extract_ports(ports):
     return extracted
 
 def list_vm_services_with_ports(ssh, root_dir="/root"):
-    stdin, stdout, stderr = ssh.exec_command(f"find {root_dir} -maxdepth 2 -type f -regex '.*/\\(docker-\\)?compose\\.ya?ml'")
+    stdin, stdout, stderr = ssh.exec_command(
+        f"find {root_dir} -maxdepth 2 -type f -regex '.*/\\(docker-\\)?compose\\.ya?ml'"
+    )
 
     compose_paths = stdout.read().decode().splitlines()
     services = []
 
     for path in compose_paths:
-        folder_name = os.path.basename(os.path.dirname(path))
+        folder_path = os.path.dirname(path)
+        folder_name = os.path.basename(folder_path)
         stdin, stdout, stderr = ssh.exec_command(f"cat {path}")
         compose_content = stdout.read().decode()
 
         service_obj = {"name": folder_name}
+
+        # Step: Check for proxy file
+        proxy_filename = f"proxy_{folder_name}.py"
+        log.info(f"Checking for proxy file: {proxy_filename} in {folder_path}")
+        check_cmd = f"test -f {folder_path}/{proxy_filename}"
+        stdin, stdout, stderr = ssh.exec_command(check_cmd)
+        exit_status = stdout.channel.recv_exit_status()
+        log.info(f"Proxy file check exit status: {exit_status}")
+        service_obj["proxied"] = (exit_status == 0)
 
         if not compose_content:
             log.warning(f"⚠️ No compose file found in {folder_name}")
@@ -71,7 +83,6 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
                 subservices.append(service)
                 all_ports.extend(service['ports'])
 
-                # high chances its the main (?)
                 if not main_service:
                     if 'build' in value and value['build'] in ['.', './']:
                         main_service = service
@@ -103,7 +114,8 @@ def save_services_to_yaml(services, path):
     for s in services:
         entry = {
             "name": s.get("name"),
-            "port": s.get("port", None)
+            "port": s.get("port", None),
+            "proxied": s.get("proxied", False),
         }
 
         if "services" in s:

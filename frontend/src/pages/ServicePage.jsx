@@ -42,6 +42,7 @@ function ServicePage() {
   const [vmIp, setVmIp] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingSubservice, setPendingSubservice] = useState(null);
+  const [serviceIsProxy, setServiceIsProxy] = useState(false);
 
   useEffect(() => {
     if (!name) return;
@@ -51,6 +52,7 @@ function ServicePage() {
       .then((res) => res.json())
       .then((service) => {
         setService(service);
+        setServiceIsProxy(service.proxied);
       });
 
     // Fetch locked services
@@ -188,7 +190,7 @@ function ServicePage() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Unknown error");
-
+      setServiceIsProxy(true);
       showAlert(`Proxy installed for ${pendingSubservice}`, "success");
     } catch (err) {
       showAlert(`Failed to install proxy: ${err.message}`, "error");
@@ -271,7 +273,7 @@ function ServicePage() {
           </CardContent>
         </Card>
 
-        <ProxyActionsCard showAlert={showAlert} service={service} />
+        {serviceIsProxy && <ProxyActionsCard showAlert={showAlert} service={service} />}
       </Box>
 
       <ConfirmDialog

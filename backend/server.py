@@ -166,7 +166,11 @@ def install_proxy():
 
     result = install_proxy_for_service(active_ssh, config, parent, sub)
     if result.get("success"):
+        service = get_service_by_name(parent)
+        if service:
+            service["proxied"] = True
         return jsonify({"message": "Proxy installed"})
+    
     return jsonify({"error": result.get("error")}), 500
 
 @app.route("/api/reload_proxy", methods=["POST"])
