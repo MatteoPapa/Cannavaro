@@ -195,30 +195,45 @@ def get_code(ssh, service_name):
     code_path = f"/root/{service_name}/proxy_{service_name}.py"
     try:
         stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
-        code = stdout.read().decode()
+        full_code = stdout.read().decode()
+
+        # Slice before LOGGER section
+        logger_marker = "##############################   LOGGER   ##############################"
+        code = full_code.split(logger_marker)[0]
+
         return {"success": True, "code": code}
     except Exception as e:
         return {"success": False, "error": str(e)}
     
-def save_code(ssh, service_name, code):
+def save_code(ssh, service_name, new_partial_code):
     code_path = f"/root/{service_name}/proxy_{service_name}.py"
 
-    # Step 1: Validate syntax locally
     try:
-        compile(code, "<string>", "exec")
-    except SyntaxError as e:
-        return {
-            "success": False,
-            "error": f"Syntax error in code: {e}"
-        }
+        # Fetch full current code
+        stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
+        full_code = stdout.read().decode()
 
-    try:
-        # Step 2: Write code to remote file
-        import tempfile
-        import os
+        # Split at LOGGER marker
+        logger_marker = "##############################   LOGGER   ##############################"
+        parts = full_code.split(logger_marker, 1)
+        if len(parts) < 2:
+            return {"success": False, "error": "LOGGER marker not found in the existing script."}
 
+        # Reconstruct full script with updated top part
+        updated_code = new_partial_code.rstrip() + "\n\n" + logger_marker + parts[1]
+
+        # Validate syntax
+        try:
+            compile(updated_code, "<string>", "exec")
+        except SyntaxError as e:
+            return {
+                "success": False,
+                "error": f"Syntax error in code: {e}"
+            }
+
+        # Upload back to remote
         with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
-            tmp.write(code)
+            tmp.write(updated_code)
             tmp_path = tmp.name
 
         sftp = ssh.open_sftp()
@@ -227,19 +242,19 @@ def save_code(ssh, service_name, code):
         sftp.close()
         os.remove(tmp_path)
 
-        # Step 3: Git commit
-        commit_msg = "Update proxy code"
+        # Git commit
+        commit_msg = "Update proxy code (partial edit)"
         run_remote_command(ssh, f"""
             cd /root/{service_name} && \
             git add {os.path.basename(code_path)} && \
             git commit -m '{commit_msg}'
         """)
 
-        return {"success": True, "message": "Code saved and committed successfully"}
+        return {"success": True, "message": "Partial code saved and committed successfully"}
 
     except Exception as e:
         return {"success": False, "error": str(e)}
-    
+
 def get_regex(ssh, service_name):
     regex_path = f"/root/{service_name}/proxy_{service_name}.py"
     try:

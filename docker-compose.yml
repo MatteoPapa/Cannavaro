@@ -7,6 +7,8 @@ services:
     command: ["npm", "run", "build"]
     volumes:
       - frontend-build:/app/dist
+    logging:
+      driver: "none"
 
   backend:
     build:

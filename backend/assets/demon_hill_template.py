@@ -27,6 +27,7 @@ REGEX_MASKS_2 = [
 	#rb'filename=".*"',
 ]
 
+FLAG_REPLACEMENT = "GRAZIEDARIO"
 
 ##############################   MAIN   ##############################
 
@@ -72,7 +73,7 @@ if __name__ == '__main__':
 
 def replace_flag(logger: logging.Logger, data: bytes, id: int) -> bytes:
 	def callback(match_obj):
-		new_flag = "GRAZIEDARIO"
+		new_flag = FLAG_REPLACEMENT
 		logger.warning(f"{match_obj.group().decode()} -> {new_flag}")
 		return new_flag.encode()
 
@@ -81,7 +82,7 @@ def replace_flag(logger: logging.Logger, data: bytes, id: int) -> bytes:
 	if search:
 		data = re.sub(FLAG_REGEX, callback, data)
 	#else:
-	#	data = b"HTTP/2 404 Not Found\n"
+	#	data = b"HTTP/1.1 500 Internal Server Error\r\n\r\n"
 	return data
 
 
@@ -122,9 +123,8 @@ SERVER_FILTERS = [
 CLIENT_FILTERS = [
 ]
 
-# CLIENT ------------> PROXY ------(client_filters)------> SERVER
 
-# CLIENT <------(server_filters)------ PROXY <------------ SERVER
+
 
 ##############################   LOGGER   ##############################
 
