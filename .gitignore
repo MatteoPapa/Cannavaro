@@ -13,3 +13,11 @@ git_key.pem.pub
 dev.bat
 dev.sh
 docker-compose.dev.yml
+main.tf
+variables.tf
+cloud-init.yaml
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+reset_hetzner.sh
+.terraform

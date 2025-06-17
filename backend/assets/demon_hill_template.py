@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
 def replace_flag(logger: logging.Logger, data: bytes, id: int) -> bytes:
 	def callback(match_obj):
-		new_flag = "GRAZIEDARIOGRAZIEDARIO"
+		new_flag = "GRAZIEDARIO"
 		logger.warning(f"{match_obj.group().decode()} -> {new_flag}")
 		return new_flag.encode()
 
