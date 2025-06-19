@@ -10,6 +10,11 @@ intro = open("intro.txt").read()
 target = None
 cc_pb2, cc_pb2_grpc = grpc.protos_and_services("cheesycheats.proto")
 ROOT_CERTIFICATE = open("ca-cert.pem", "rb").read()
+import os
+
+# os.environ["GRPC_VERBOSITY"] = "debug"
+# os.environ["GRPC_TRACE"] = "all"
+
 
 def exit_service(*args):
     raise SystemExit
@@ -133,7 +138,7 @@ def main():
         exit()
         
     target = sys.argv[1]
-    port = int(sys.argv[2]) 
+    port = 5000
     session = None
     console = Console(width = 100)
     print(Panel.fit("Welcome to [yellow]CheesyCheats!"))

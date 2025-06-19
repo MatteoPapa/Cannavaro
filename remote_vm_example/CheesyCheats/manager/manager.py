@@ -23,6 +23,7 @@ class Manager(cc_pb2_grpc.ManagerServicer):
         super().__init__()
 
     def Register(self, request, _): 
+        logging.info(f"[+] Register request received: username={request.username}")
         try:
             assert 'user.'+request.username not in self.db
             self.db['user.' + request.username] = request.password

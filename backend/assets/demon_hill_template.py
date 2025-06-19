@@ -8,7 +8,7 @@ import base64
 import importlib
 import ssl
 from collections import UserDict
-
+from scapy.all import PcapNgWriter, PcapWriter, Ether, IP, IPv6, TCP, Raw
 
 #PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE
 ##############################   SETTINGS   ##############################
@@ -33,10 +33,11 @@ FROM_PORT = {{FROM_PORT}} # type: ignore
 TO_PORT = {{TO_PORT}} # type: ignore
 
 # SSL Configuration (Pay attention to the paths)
-SSL = False
-SSL_KEYFILE = "./beta/server-key.pem"
-SSL_CERTFILE = "./beta/server-cert.pem"
-SSL_CA_CERT = "./beta/ca-cert.pem"
+SSL = {{SSL_ENABLED}} # type: ignore
+SSL_KEYFILE = "./certs/server-key.pem"
+SSL_CERTFILE = "./certs/server-cert.pem"
+SSL_CA_CERT = "./certs/ca-cert.pem"
+ALLOWED_PROTOCOLS = ['http/1.1'] # type: ignore
 
 DUMP = SSL
 DUMP_MODE = 'pcap'
@@ -53,13 +54,11 @@ HISTORY_MAX_SIZE = 1024 * 1024
 
 FLAG_LEN = 32
 FLAG_REGEX = rb'[A-Z0-9]{31}='
-
 FLAG_REPLACEMENT = 'GRAZIEDARIO'
 BLOCK_ALL_EVIL_REQUESTS = False #Not only flag replacements, but also other requests that match the regexes
 
 REGEX_MASKS = [
 ]
-
 REGEX_MASKS_2 = [
 ]
 
@@ -414,17 +413,17 @@ def empty_filter(logger:logging.Logger, data:bytes, server_history:History, clie
 
 
 SERVER_FILTERS = [
-	regex_filter
+	server_info_filter,
 ]
 
 CLIENT_FILTERS = [
+	client_info_filter,
 ]
 
 #PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE
 ##############################   DUMPER   ##############################
 
-if SSL:
-	from scapy.all import PcapNgWriter, PcapWriter, Ether, IP, IPv6, TCP, Raw
+
 class Dumper(threading.Thread):
 	def __init__(self, file_format, logger):
 		super().__init__()
@@ -652,7 +651,7 @@ class TCPProxy(threading.Thread):
 		self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		if SSL:
 			context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-			context.set_alpn_protocols(['h2', 'http/1.1'])
+			context.set_alpn_protocols(ALLOWED_PROTOCOLS)
 			context.load_cert_chain(SSL_CERTFILE, SSL_KEYFILE)
 			self.sock = context.wrap_socket(
 				self.sock,
@@ -790,7 +789,11 @@ def reload(mdl, proxy: TCPProxy, args: list) -> dict | TCPProxy:
 	proxy.sample_connection()
 	proxy.lock.acquire()
 	proxy.lock.release()
-	proxy = TCPProxy(logger, FROM_ADDR, TO_ADDR, FROM_PORT, TO_PORT, tmp_sock)
+	if SSL:
+		tmp_sock.close()
+		proxy = TCPProxy(logger, FROM_ADDR, TO_ADDR, FROM_PORT, TO_PORT)
+	else:
+		proxy = TCPProxy(logger, FROM_ADDR, TO_ADDR, FROM_PORT, TO_PORT, tmp_sock)
 	proxy.start()
 	return proxy
 

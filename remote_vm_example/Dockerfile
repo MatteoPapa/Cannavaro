@@ -1,8 +1,9 @@
-FROM ubuntu:22.04
+FROM python:3.12-slim
 
 # Install Docker, curl, SSH, etc.
 RUN apt-get update && \
-    apt-get install -y docker.io curl openssh-server iputils-ping net-tools vim && \
+    apt-get install -y docker.io curl openssh-server iputils-ping net-tools vim zip rsync git screen python3-pip&& \
+    pip install --no-cache-dir scapy requests && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Docker Compose v2 plugin
@@ -23,6 +24,7 @@ COPY Pwnzer0tt1Shop /root/Pwnzer0tt1Shop
 COPY PCSS /root/PCSS
 COPY Mudarabah /root/Mudarabah
 COPY CheesyCheats /root/CheesyCheats
+COPY HttpsCustom /root/HttpsCustom
 
 # Expose SSH port
 EXPOSE 2222

@@ -164,9 +164,9 @@ def install_proxy():
     if is_proxy_installed(active_ssh, parent):
         return jsonify({"error": "Proxy already installed"}), 400
 
-    result = install_proxy_for_service(active_ssh, config, parent, sub)
+    service = get_service_by_name(parent)
+    result = install_proxy_for_service(active_ssh, config, parent, sub, service)
     if result.get("success"):
-        service = get_service_by_name(parent)
         if service:
             service["proxied"] = True
         return jsonify({"message": "Proxy installed"})

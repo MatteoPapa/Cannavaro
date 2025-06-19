@@ -7,6 +7,7 @@ services:
       - API_HOST=cheats_api:5555
       - DB_SECRET=ABCDEF1234567890ABCDEF1234567890
       - TOKEN_KEY=12345678ABCDEF90
+      - SERVICE_PORT=5006
     ports:
       - 5000:5000
     restart: unless-stopped

@@ -46,6 +46,7 @@ def user_login(stub, username, password):
 def user_register(stub, username, password):
     request = cc_manager.RegistrationRequest(username = username, password = password)
     response = stub.Register(request)
+    print(response)
     return response.status
 
 def sell(stub, title, body, prefix=None, target=None):
