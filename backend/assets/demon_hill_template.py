@@ -44,7 +44,7 @@ DUMP_MODE = 'pcap'
 PCAPS_DIR = '/root/pcaps/service/'
 if DUMP and not os.path.exists(PCAPS_DIR):
 	os.makedirs(PCAPS_DIR)
-	
+
 DUMP_FORMAT = f"{PCAPS_DIR}service_{TO_PORT}_%Y-%m-%d_%H.%M.%S.pcap"
 DUMP_ROUND = 60
 
@@ -527,7 +527,8 @@ class Client2Server(threading.Thread):
 			if SSL:
 				context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 				context.set_alpn_protocols(['h2', 'http/1.1'])
-				context.load_verify_locations(SSL_CA_CERT)
+                if SSL_CA_CERT:
+				    context.load_verify_locations(SSL_CA_CERT)
 				self.server = context.wrap_socket(
 					self.server,
 					do_handshake_on_connect=True,
@@ -734,7 +735,7 @@ class TCPProxy(threading.Thread):
 			)
 			if not middleware.error:
 				middleware.start()
-		
+
 		self.logger.info(f"{to_rainbow('Proxy Closed')}")
 		#try:
 		self.lock.release()
@@ -760,7 +761,7 @@ class TCPProxy(threading.Thread):
 		if self.sock:
 			self.sock.close()
 			self.sample_connection()
-	
+
 
 	def exit(self):
 		self.lock.acquire()

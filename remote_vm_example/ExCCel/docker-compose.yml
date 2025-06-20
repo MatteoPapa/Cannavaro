@@ -1,0 +1,36 @@
+services:
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    cpus: 1
+    mem_limit: 256mb
+    environment:
+      BACKEND_HOST: backend:5000
+    ports:
+      - 9000:80
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    cpus: 2
+    mem_limit: 1024mb
+    environment:
+      FLASK_SECRET: C7E7E916805C93EB8433DEE610AA2BFF
+      INSTANCE_PATH: /data
+      WORKSHEETS_PATH: /worksheets
+      PROCESSOR_HOST: processor
+      PROCESSOR_PORT: 1337
+    volumes:
+      - ./data/worksheets:/worksheets
+      - ./data/backend:/data
+
+  processor:
+    image: cybersecnatlab/challenge-jail@sha256:e2609e2e1cca06fe0423eca30f5e85577c8abf42b7c61c0dc6c63dd8d80d8500
+    privileged: true
+    restart: unless-stopped
+    volumes:
+      - ./data/worksheets:/worksheets:ro
+      - ./processor:/home/user/chall:ro
+    environment:
+      LOG_STDERR: "true"
+      TIMEOUT: 30

@@ -7,7 +7,7 @@ def is_ssh_active(ssh):
         return ssh is not None and ssh.get_transport() and ssh.get_transport().is_active()
     except Exception:
         return False
-    
+
 def ssh_connect(config):
     """
     Establishes an SSH connection to the remote VM using password authentication.
@@ -38,8 +38,10 @@ def ensure_remote_dependencies(ssh):
 
         commands = [
             "apt-get update -y",
-            "apt-get install -y zip rsync git screen python3-pip sslsplit",
-            "python3 -m pip install requests scapy",
+            "apt-get install -y zip rsync git screen software-properties-common libffi-dev",
+            "add-apt-repository ppa:deadsnakes/ppa -y",
+            "apt install -y python3.10 python3.10-venv python3.10-dev",
+            "python3.10 -m pip install cffi scapy requests",
         ]
 
         for cmd in commands:
@@ -63,7 +65,7 @@ def setup_ssh_authorized_key(ssh, config):
         log.info("Skipped adding SSH key to authorized_keys")
         return False
 
-    if not os.path.exists(pub_key_path):
+    if not os.path.exists(pub_key_path) or os.path.isdir(pub_key_path):
         log.error(f"⚠️ SSH public key not found at path: {pub_key_path}")
         return False
 
