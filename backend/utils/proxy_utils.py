@@ -378,7 +378,7 @@ def save_code(ssh, service_name, new_partial_code):
         commit_msg = "Update proxy code (partial edit)"
         run_remote_command(ssh, f"""
             cd /root/{service_name} && \
-            git add proxy_folder_{service_name} && \
+            git add proxy_folder_{service_name}/proxy.py && \
             git commit -m '{commit_msg}'
         """)
 
@@ -456,7 +456,7 @@ def save_regex(ssh, service_name, new_regex_list):
         commit_msg = "Update REGEX_MASKS"
         run_remote_command(ssh, f"""
             cd /root/{service_name} && \
-            git add proxy_folder_{service_name} && \
+            git add proxy_folder_{service_name}/proxy.py && \
             git commit -m '{commit_msg}'
         """)
 
