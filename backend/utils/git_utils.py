@@ -37,7 +37,7 @@ def setup_ssh_key(ssh, config):
     try:
         log.info(f"🛠 Setting Git identity for 'root'...")
         run_remote_command(ssh, "git config --global user.name \"Root User\"")
-        run_remote_command(ssh, "git config --global user.email \"skibidi@palleselvaggie.com\"")
+        run_remote_command(ssh, "git config --global user.email \"skibidi@palleselvagge.com\"")
         run_remote_command(ssh, f"git config --global init.defaultBranch \"{DEFAULT_BRANCH}\"")
         # Add all service folders to Git's safe.directory list
         for svc in config.get("services", []):
@@ -49,11 +49,14 @@ def setup_ssh_key(ssh, config):
 
     log.info("✅ Git setup complete.")
 
-def initialize_service_repo(ssh, config, path):
+import tempfile
+
+def initialize_service_repo(ssh, config, svc):
     """
     Initializes a Git repository in the specified path if one doesn't exist.
     Sets shared group access, permissions, and makes an initial commit if needed.
     """
+    path = "/root/" + svc["name"]
 
     try:
         log.info(f"📁 Checking if {path} is already a Git repository...")
@@ -67,10 +70,41 @@ def initialize_service_repo(ssh, config, path):
         log.info("🔧 Configuring Git shared group access...")
         run_remote_command(ssh, f"cd {path} && git config core.sharedRepository group")
 
-        # Ensure Git can update when pushed to
+        # Collect volumes to ignore
+        volumes_to_ignore = []
+        for subservice in svc.get("services", []):
+            for volume in subservice.get("volumes", []):
+                if isinstance(volume, str):
+                    host_path = volume.split(":")[0].strip()
+                    if host_path and not host_path.startswith("/"):
+                        clean_path = os.path.normpath(host_path).lstrip("./")
+                        log.info(f"📦 Adding volume to ignore list: {clean_path}")
+                        volumes_to_ignore.append(clean_path)
+
+        unique_ignores = sorted(set(volumes_to_ignore))
+        log.info(f"📦 Ignoring volumes: {', '.join(unique_ignores)}")
+
+        gitignore_path = os.path.join(path, ".gitignore")
+        # if not remote_file_exists(ssh, gitignore_path) and unique_ignores:
+        if True:
+            log.info(f"📄 Creating .gitignore at {gitignore_path}...")
+
+            # Write content to a temporary file locally
+            with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
+                tmp.write("\n".join(unique_ignores) + "\n")
+                local_path = tmp.name
+                log.info(f"Content written to temporary file: {local_path}")
+                log.info(f"Unique ignores: {unique_ignores}")
+
+            # Copy it to the remote using scp
+            sftp = ssh.open_sftp()
+            sftp.put(local_path, gitignore_path)
+            sftp.close()
+
+        # Git receive config
         run_remote_command(ssh, f"cd {path} && git config receive.denyCurrentBranch updateInstead")
 
-        # Check if repo has any commits
+        # Git commit if needed
         has_commits = run_remote_command(
             ssh, f"cd {path} && git rev-parse --verify HEAD >/dev/null 2>&1 && echo yes || echo no"
         ).strip()
@@ -87,14 +121,12 @@ def initialize_service_repo(ssh, config, path):
     except Exception as e:
         log.error(f"❌ Failed during Git repository setup: {e}")
 
+
 def initialize_all_repos(ssh, config):
     """
     Initializes a Git repository in /root if one doesn't exist.
     Sets shared group access, permissions, and makes an initial commit if needed.
     """
 
-    services = config.get("services")
-
-    for svc in services:
-        path = "/root/" + svc["name"]
-        initialize_service_repo(ssh, config, path)
+    for svc in config.get("services", []):
+        initialize_service_repo(ssh, config, svc)

@@ -117,6 +117,8 @@ def install_proxy_for_service(ssh, config, parent, subservice, service):
             return {"success": False, "error": "Demon Hill proxy template not found."}
 
         ssl_state = "True" if service.get("tls", False) else "False"
+        # ssl_state = "False"
+
         rendered_script = render_jinja_proxy_script(
             parent,
             original_port,
