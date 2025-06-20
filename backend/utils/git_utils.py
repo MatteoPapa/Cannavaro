@@ -37,7 +37,7 @@ def setup_ssh_key(ssh, config):
     try:
         log.info(f"🛠 Setting Git identity for 'root'...")
         run_remote_command(ssh, "git config --global user.name \"Root User\"")
-        run_remote_command(ssh, "git config --global user.email \"skibidi@palleselvaggie.com\"")
+        run_remote_command(ssh, "git config --global user.email \"skibidi@palleselvagge.com\"")
         run_remote_command(ssh, f"git config --global init.defaultBranch \"{DEFAULT_BRANCH}\"")
         # Add all service folders to Git's safe.directory list
         for svc in config.get("services", []):
