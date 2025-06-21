@@ -527,8 +527,8 @@ class Client2Server(threading.Thread):
 			if SSL:
 				context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 				context.set_alpn_protocols(['h2', 'http/1.1'])
-                if SSL_CA_CERT:
-				    context.load_verify_locations(SSL_CA_CERT)
+				if SSL_CA_CERT:
+					context.load_verify_locations(SSL_CA_CERT)
 				self.server = context.wrap_socket(
 					self.server,
 					do_handshake_on_connect=True,
