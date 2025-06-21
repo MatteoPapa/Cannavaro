@@ -524,16 +524,23 @@ class Client2Server(threading.Thread):
 				self.server = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
 			else:
 				self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
 			if SSL:
-				context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-				context.set_alpn_protocols(['h2', 'http/1.1'])
 				if SSL_CA_CERT:
+					context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+					context.set_alpn_protocols(['h2', 'http/1.1'])
 					context.load_verify_locations(SSL_CA_CERT)
+				else:
+					# Disable certificate verification
+					context = ssl._create_unverified_context()
+					context.set_alpn_protocols(['h2', 'http/1.1'])
+
 				self.server = context.wrap_socket(
 					self.server,
 					do_handshake_on_connect=True,
 					server_hostname=to_host,
 				)
+
 			self.server.connect((to_host, to_port))
 
 			if DUMP:
