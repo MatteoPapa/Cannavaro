@@ -59,7 +59,6 @@ def initialize_service_repo(ssh, config, svc):
     path = "/root/" + svc["name"]
 
     try:
-        log.info(f"📁 Checking if {path} is already a Git repository...")
         is_git_repo = run_remote_command(ssh, f"test -d {path}/.git && echo exists || echo missing").strip()
 
         if is_git_repo == "missing":
@@ -67,34 +66,60 @@ def initialize_service_repo(ssh, config, svc):
             run_remote_command(ssh, f"git init {path}")
 
         # Configure shared repo access
-        log.info("🔧 Configuring Git shared group access...")
         run_remote_command(ssh, f"cd {path} && git config core.sharedRepository group")
 
         # Collect volumes to ignore
         volumes_to_ignore = []
+        
+        # Add common Python and Docker-related ignores
+        default_ignores = [
+            "*.pyc",
+            "*.pyo",
+            "*.pyd",
+            "__pycache__/",
+            ".Python",
+            "env/",
+            "venv/",
+            ".env",
+            ".venv",
+            ".idea/",
+            ".vscode/",
+            "*.log",
+            "*.db",
+            "*.sqlite3",
+            "*.bak",
+            ".DS_Store",
+            "*.swp",
+            "*.tmp",
+            ".pytest_cache/",
+            ".mypy_cache/",
+            ".coverage",
+            "htmlcov/",
+            "node_modules/",
+            "dist/",
+            "build/",
+            "*.egg-info/"
+        ]
+        volumes_to_ignore.extend(default_ignores)
+
         for subservice in svc.get("services", []):
             for volume in subservice.get("volumes", []):
                 if isinstance(volume, str):
                     host_path = volume.split(":")[0].strip()
                     if host_path and not host_path.startswith("/"):
                         clean_path = os.path.normpath(host_path).lstrip("./")
-                        log.info(f"📦 Adding volume to ignore list: {clean_path}")
                         volumes_to_ignore.append(clean_path)
 
         unique_ignores = sorted(set(volumes_to_ignore))
-        log.info(f"📦 Ignoring volumes: {', '.join(unique_ignores)}")
 
         gitignore_path = os.path.join(path, ".gitignore")
-        # if not remote_file_exists(ssh, gitignore_path) and unique_ignores:
-        if True:
+        if not remote_file_exists(ssh, gitignore_path) and unique_ignores:
             log.info(f"📄 Creating .gitignore at {gitignore_path}...")
 
             # Write content to a temporary file locally
             with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
                 tmp.write("\n".join(unique_ignores) + "\n")
                 local_path = tmp.name
-                log.info(f"Content written to temporary file: {local_path}")
-                log.info(f"Unique ignores: {unique_ignores}")
 
             # Copy it to the remote using scp
             sftp = ssh.open_sftp()

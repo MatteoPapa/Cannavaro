@@ -39,6 +39,7 @@ def is_proxy_installed(ssh, service_name):
     remote_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy.py"
     stdin, stdout, stderr = ssh.exec_command(f"test -f {remote_path} && echo exists || echo missing")
     output = stdout.read().decode().strip()
+    log.info(f"Proxy check for {service_name}: {output}")
     return output == "exists"
 
 # ----- MAIN FUNCTIONS -----
@@ -287,10 +288,22 @@ def reload_proxy_screen(ssh, service_name):
 
 def get_logs(ssh, service_name):
     log_path = f"/root/{service_name}/proxy_folder_{service_name}/log_proxy_{service_name}.txt"
+    tmp_path = f"/root/{service_name}/proxy_folder_{service_name}/log_tmp.txt"
 
     try:
-        stdin, stdout, stderr = ssh.exec_command(f"cat {log_path}")
+        cmd = f"""
+        line_count=$(wc -l < "{log_path}")
+        if [ "$line_count" -gt 10000 ]; then
+            tail -n 10000 "{log_path}" > "{tmp_path}" && mv "{tmp_path}" "{log_path}" && \
+            cd /root/{service_name} && \
+            git add proxy_folder_{service_name}/log_proxy_{service_name}.txt && \
+            git commit -m 'Trimmed log file to last 10000 lines for proxy {service_name}'
+        fi
+        tail -n 2000 "{log_path}"
+        """
+        stdin, stdout, stderr = ssh.exec_command(cmd)
         logs = stdout.read().decode()
+
         return {"success": True, "logs": logs}
     except Exception as e:
         return {"success": False, "error": str(e)}

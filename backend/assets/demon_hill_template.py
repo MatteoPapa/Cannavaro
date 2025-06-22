@@ -413,11 +413,9 @@ def empty_filter(logger:logging.Logger, data:bytes, server_history:History, clie
 
 
 SERVER_FILTERS = [
-	server_info_filter,
 ]
 
 CLIENT_FILTERS = [
-	client_info_filter,
 ]
 
 #PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE

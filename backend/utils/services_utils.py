@@ -60,7 +60,7 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
         service_obj["tls"] = bool(pem_result)
 
         # Check for proxy file
-        proxy_filename = f"proxy_{folder_name}.py"
+        proxy_filename = f"proxy_folder_{folder_name}/proxy.py"
         log.info(f"Checking for proxy file: {proxy_filename} in {folder_path}")
         check_cmd = f"test -f {folder_path}/{proxy_filename}"
         stdin, stdout, stderr = ssh.exec_command(check_cmd)
