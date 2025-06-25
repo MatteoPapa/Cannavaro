@@ -40,8 +40,6 @@ function ServicePage() {
   const [restartingDocker, setRestartingDocker] = useState(false);
   const [lockedServices, setLockedServices] = useState(new Set());
   const [vmIp, setVmIp] = useState("");
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingSubservice, setPendingSubservice] = useState(null);
   const [serviceIsProxy, setServiceIsProxy] = useState(false);
 
   useEffect(() => {
@@ -168,38 +166,6 @@ function ServicePage() {
     }
   };
 
-  const triggerInstallProxy = (subservice) => {
-    setConfirmOpen(true);
-    setPendingSubservice(subservice);
-  };
-
-  const handleConfirmInstall = async () => {
-    setConfirmOpen(false);
-    if (!pendingSubservice) return;
-
-    setSettingProxy(true);
-    try {
-      const res = await fetch("/api/install_proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          service: name,
-          subservice: pendingSubservice,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unknown error");
-      setServiceIsProxy(true);
-      showAlert(`Proxy installed for ${pendingSubservice}`, "success");
-    } catch (err) {
-      showAlert(`Failed to install proxy: ${err.message}`, "error");
-    } finally {
-      setSettingProxy(false);
-      setPendingSubservice(null);
-    }
-  };
-
   if (!service) {
     return (
       <Container display="flex">
@@ -265,8 +231,8 @@ function ServicePage() {
                     isLocked={lockedServices.has(svc.name)}
                     onToggleLock={handleLockToggle}
                     onRestart={handleResetSubservice}
-                    onInstallProxy={triggerInstallProxy}
-                    isInstallingProxy={settingProxy}
+                    settingProxy={settingProxy}
+                    setSettingProxy={setSettingProxy}
                   />
                 </Box>
               ))}
@@ -277,13 +243,6 @@ function ServicePage() {
         {serviceIsProxy && <ProxyActionsCard showAlert={showAlert} service={service} />}
       </Box>
 
-      <ConfirmDialog
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmInstall}
-        title="Install Proxy"
-        description={`Are you sure you want to install a proxy on "${pendingSubservice}"?`}
-      />
     </Container>
   );
 }

@@ -33,27 +33,10 @@ function SubserviceCard({
   isLocked,
   onToggleLock,
   onRestart,
-  onInstallProxy,
-  isInstallingProxy,
+  settingProxy,
+  setSettingProxy 
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [port, setPort] = useState("");
-  const [useTLS, setUseTLS] = useState(false);
-  const [serverCert, setServerCert] = useState("/root/" + parent.name + "/server-cert.pem");
-  const [serverKey, setServerKey] = useState("/root/" + parent.name + "/server-key.pem");
-  const [protocol, setProtocol] = useState("http");
-
-  const handleDialogSubmit = () => {
-    onInstallProxy(service.name, {
-      port,
-      tlsEnabled: useTLS,
-      serverCert,
-      serverKey,
-      protocol,
-    });
-    setDialogOpen(false);
-  };
-
   return (
     <>
       <Card
@@ -109,7 +92,7 @@ function SubserviceCard({
                   </IconButton>
                   <IconButton
                     onClick={() => setDialogOpen(true)}
-                    disabled={isLocked || isInstallingProxy}
+                    disabled={isLocked || settingProxy}
                     color="secondary"
                   >
                     <Tooltip title="Install proxy on this service">
@@ -126,19 +109,11 @@ function SubserviceCard({
       <ProxyInstallDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        onSubmit={handleDialogSubmit}
-        port={port}
-        setPort={setPort}
-        useTLS={useTLS}
-        setUseTLS={setUseTLS}
-        serverCert={serverCert}
-        setServerCert={setServerCert}
-        serverKey={serverKey}
-        setServerKey={setServerKey}
-        protocol={protocol}
-        setProtocol={setProtocol}
-        service= {service}
+        parent={parent.name}
+        subservice={service.name}
+        setSettingProxy={setSettingProxy}
       />
+
 
     </>
   );
