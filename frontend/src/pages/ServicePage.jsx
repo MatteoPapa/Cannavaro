@@ -260,6 +260,7 @@ function ServicePage() {
               {service.services.map((svc) => (
                 <Box key={svc.name} flex={0.5}>
                   <SubserviceCard
+                    parent={service}
                     service={svc}
                     isLocked={lockedServices.has(svc.name)}
                     onToggleLock={handleLockToggle}
