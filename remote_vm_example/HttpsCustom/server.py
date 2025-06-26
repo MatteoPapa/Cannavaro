@@ -13,8 +13,8 @@ class CustomHandler(SimpleHTTPRequestHandler):
 httpd = HTTPServer(('0.0.0.0', PORT), CustomHandler)
 
 context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-context.load_cert_chain(certfile='manager/server-cert.pem', keyfile='manager/server-key.pem')
-context.load_verify_locations(cafile='manager/ca-cert.pem')
+context.load_cert_chain(certfile='server-cert.pem', keyfile='server-key.pem')
+context.load_verify_locations(cafile='ca-cert.pem')
 context.verify_mode = ssl.CERT_OPTIONAL
 
 # 💡 Only advertise HTTP/1.1

@@ -141,6 +141,7 @@ function ProxyInstallDialog({
                 size="small"
                 value={serverCert}
                 onChange={(e) => setServerCert(e.target.value)}
+                sx={{ mb: 1 }}
               />
               <TextField
                 label="Server Key Path"

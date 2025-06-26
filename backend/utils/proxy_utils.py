@@ -36,238 +36,168 @@ def is_proxy_installed(ssh, service_name):
     """
     Checks if the proxy file for the given service already exists on the VM.
     """
-    remote_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy.py"
+    remote_path = f"/root/{service_name}/proxy_folder_{service_name}"
     stdin, stdout, stderr = ssh.exec_command(f"test -f {remote_path} && echo exists || echo missing")
     output = stdout.read().decode().strip()
     log.info(f"Proxy check for {service_name}: {output}")
     return output == "exists"
 
 # ----- MAIN FUNCTIONS -----
-def install_proxy_for_service(ssh, config, parent, subservice, service):
-    service_path = f"/root/{parent}"
-    compose_path = find_compose_file(ssh, service_path)
-
-    if not compose_path:
-        return {"success": False, "error": "Compose file not found in service directory."}
-
-    backup_path = f"{compose_path}.bak"
-
-    # Backup original
-    run_remote_command(ssh, f"cp {compose_path} {backup_path}")
-
-    # Read and parse YAML
-    raw_yaml = run_remote_command(ssh, f"cat {compose_path}")
-    compose_data = yaml.safe_load(raw_yaml)
-
+def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
     try:
+        service_path = f"/root/{parent}"
+        compose_path = find_compose_file(ssh, service_path)
+        if not compose_path:
+            return {"success": False, "error": "Compose file not found in service directory."}
+
+        # Backup compose
+        backup_path = f"{compose_path}.bak"
+        run_remote_command(ssh, f"cp {compose_path} {backup_path}")
+        raw_yaml = run_remote_command(ssh, f"cat {compose_path}")
+        compose_data = yaml.safe_load(raw_yaml)
+
         service_def = compose_data['services'][subservice]
         ports = service_def.get("ports", [])
-
         if not ports:
             return {"success": False, "error": f"No ports defined for subservice '{subservice}'"}
-        
-        updated_ports = []
 
-        for port in ports:
-            if isinstance(port, int):
-                # Treat raw port as host and container (common for symmetric ports)
-                host_port = container_port = port
-            else:
-                parts = port.split(":")
+        updated_ports = []
+        original_port = None
+        adjusted_port = None
+
+        if proxy_config.get("port"):
+            # Use custom port mapping
+            original_port = int(proxy_config["port"])
+            adjusted_port = original_port
+            container_port = int(ports[0].split(":")[-1])
+            updated_ports = [f"127.0.0.1:{original_port}:{container_port}"]
+        else:
+            # Shift all exposed ports +6
+            for port in ports:
+                parts = str(port).split(":")
                 if len(parts) == 2:
-                    # "host:container"
-                    host_port, container_port = parts
+                    host_port, container_port = map(int, parts)
                 elif len(parts) == 3:
-                    # "ip:host:container"
-                    _, host_port, container_port = parts
+                    _, host_port, container_port = map(int, parts)
                 else:
                     return {"success": False, "error": f"Unrecognized port format: '{port}'"}
-
-            host_port = int(host_port)
-            container_port = int(container_port)
-            new_host_port = host_port + 6
-            updated_ports.append(f"127.0.0.1:{new_host_port}:{container_port}")
-
+                original_port = host_port
+                adjusted_port = host_port + 6
+                updated_ports.append(f"127.0.0.1:{adjusted_port}:{container_port}")
 
         service_def["ports"] = updated_ports
 
-        # Write back to remote file
+        # 🔐 Port usage check for adjusted_port (proxy listen port)
+        port_check_cmd = f"ss -tuln | grep ':{adjusted_port} ' || true"
+        port_check_result = run_remote_command(ssh, port_check_cmd).strip()
+
+        if port_check_result:
+            return {"success": False, "error": f"Port {adjusted_port} is already in use on the remote host."}
+
+        # Update compose file
         new_yaml = yaml.dump(compose_data)
         escaped = new_yaml.replace("'", "'\\''")
         run_remote_command(ssh, f"echo '{escaped}' > {compose_path}")
 
-        # Git commit
+        # Commit the change
         commit_msg = f"Install proxy: moved ports for subservice {subservice}"
         run_remote_command(ssh, f"""
-            cd /root/{parent} && \
+            cd {service_path} && \
             git add {os.path.basename(compose_path)} && \
             git commit -m '{commit_msg}'
         """)
-        
-         # Determine FROM and TO port
-        original_port = int(host_port)
-        adjusted_port = original_port + 6
 
-        # Determine TARGET_IP from config
-        remote_host = config.get("remote_host", "")
-        target_ip = remote_host if remote_host == "host.docker.internal" else "127.0.0.1"
+        # Copy proxy template folder (AngelPit)
+        local_proxy_dir = os.path.join(os.path.dirname(__file__), "../assets/AngelPit")
+        if not os.path.isdir(local_proxy_dir):
+            return {"success": False, "error": "Proxy template folder AngelPit not found."}
 
-        # Render the proxy script
-        local_proxy_template = os.path.join(os.path.dirname(__file__), "../assets/demon_hill_template.py")
-        if not os.path.exists(local_proxy_template):
-            return {"success": False, "error": "Demon Hill proxy template not found."}
+        remote_proxy_dir = f"{service_path}/proxy_folder_{parent}"
+        run_remote_command(ssh, f"mkdir -p {remote_proxy_dir}")
+        sftp = ssh.open_sftp()
 
-        ssl_state = "True" if service.get("tls", False) else "False"
-        # ssl_state = "False"
+        for filename in os.listdir(local_proxy_dir):
+            local_path = os.path.join(local_proxy_dir, filename)
+            remote_path = posixpath.join(remote_proxy_dir, filename)
+            sftp.put(local_path, remote_path)
 
-        rendered_script = render_jinja_proxy_script(
-            parent,
-            original_port,
-            adjusted_port,
-            target_ip,
-            local_proxy_template,
-            ssl_state
+        # Combine cert and key into combined.pem
+               # Combine cert and key into combined.pem
+        log.info(f"Proxy configuration: {proxy_config}")
+
+        if proxy_config.get("tls_enabled"):
+            cert_path = proxy_config.get("server_cert")
+            key_path = proxy_config.get("server_key")
+            log.info(f"Using cert: {cert_path}, key: {key_path}")
+
+            cert_path = proxy_config.get("server_cert")
+            key_path = proxy_config.get("server_key")
+            combined_remote_path = posixpath.join(remote_proxy_dir, "combined.pem")
+
+            log.info(f"Combining cert and key on remote: {cert_path}, {key_path} -> {combined_remote_path}")
+
+            run_remote_command(ssh, f"cat {cert_path} {key_path} > {combined_remote_path}")
+
+
+        # Create launch script
+        protocol = proxy_config["protocol"]
+        if proxy_config.get("tls_enabled"):
+            protocol = {"http": "https", "tcp": "tls"}.get(protocol, protocol)
+
+        if config["remote_host"] == "host.docker.internal":
+            address = "host.docker.internal"
+        else:
+            address = "127.0.0.1"
+
+        mitm_command = [
+            "mitmdump",
+            f"--mode reverse:{protocol}://{address}:{adjusted_port}",
+            f"--listen-port {original_port}",
+            '--certs "*=combined.pem"',
+            "--quiet",
+            "--ssl-insecure",
+            "-s angel_pit_proxy.py"
+        ]
+        if proxy_config.get("dumpPcaps"):
+            mitm_command.append("-s angel_dumper.py")
+
+
+        launch_script = "#!/bin/bash\n\n" + " \\\n  ".join(mitm_command) + "\n"
+        script_local_path = tempfile.NamedTemporaryFile("w", delete=False)
+        script_local_path.write(launch_script)
+        script_local_path.close()
+
+        launch_remote_path = posixpath.join(remote_proxy_dir, "launch_proxy.sh")
+        sftp.put(script_local_path.name, launch_remote_path)
+        sftp.chmod(launch_remote_path, 0o755)
+        os.remove(script_local_path.name)
+        sftp.close()
+
+        # Restart container
+        rolling_restart_docker_service(ssh, service_path, [subservice])
+
+        # Launch proxy via screen
+        screen_name = f"proxy_{parent}"
+        log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
+        start_cmd = (
+            f"screen -L -Logfile {log_file} "
+            f"-S {screen_name} -dm bash -lic 'cd {remote_proxy_dir} && bash {os.path.basename(launch_remote_path)}'"
         )
 
-        if ssl_state == "True":
-            return install_docker_proxy_folder(ssh, parent, rendered_script, subservice)
+        log.error(run_remote_command(ssh, start_cmd, raise_on_error=True))
 
-
-        # Upload the rendered proxy script
-        proxy_folder = f"/root/{parent}/proxy_folder_{parent}"
-        remote_path = posixpath.join(proxy_folder, "proxy.py")
-
-        try:
-            run_remote_command(ssh, f"mkdir -p {proxy_folder}")
-
-            with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
-                tmp.write(rendered_script)
-                tmp_path = tmp.name
-
-            sftp = ssh.open_sftp()
-            sftp.put(tmp_path, remote_path)
-            sftp.chmod(remote_path, 0o755)
-            sftp.close()
-            os.remove(tmp_path)
-
-            log.info(f"✅ Rendered Demon Hill proxy uploaded to {remote_path}")
-            
-            rolling_restart_docker_service(ssh, f"/root/{parent}", [subservice])
-
-            screen_name = f"proxy_{parent}"
-            log_file = f"{proxy_folder}/log_{screen_name}.txt"
-
-            start_cmd = (
-                f"screen -L -Logfile {log_file} "
-                f"-S {screen_name} -dm bash -lic 'python3 {remote_path}'"
-            )
-
-            run_remote_command(ssh, start_cmd)
-
-            run_remote_command(ssh, f"""
-                cd /root/{parent} && \
-                git add {os.path.basename(compose_path)} && \
-                git commit -m '{commit_msg} + added proxy script'
-            """)
-
-        except Exception as e:
-            return {"success": False, "error": f"Script rendered, but upload failed: {e}"}
+        # Final git commit for proxy script
+        run_remote_command(ssh, f"""
+            cd {service_path} && \
+            git add {os.path.basename(compose_path)} && \
+            git commit -m '{commit_msg} + added proxy launcher'
+        """, raise_on_error=True)
 
         return {"success": True, "message": f"Proxy installed for {parent} with subservice {subservice}"}
 
     except Exception as e:
-        # Restore backup if anything goes wrong
         run_remote_command(ssh, f"mv {backup_path} {compose_path}")
         return {"success": False, "error": f"Failed to install proxy: {e}"}
-
-def install_docker_proxy_folder(ssh, service_name, rendered_script, subservice):
-    folder = f"/root/{service_name}/proxy_folder_{service_name}"
-    dockerfile = f"""
-    FROM python:3.10-slim
-
-    WORKDIR /app
-    COPY proxy.py .
-    COPY certs/server-key.pem certs/server-key.pem
-    COPY certs/server-cert.pem certs/server-cert.pem
-    COPY certs/ca-cert.pem certs/ca-cert.pem
-
-    RUN pip install --no-cache-dir jinja2 requests certifi scapy
-
-    # Create a folder to store pcaps
-    RUN mkdir -p /app/pcaps
-
-    # EXPOSE the FROM_PORT for visibility (optional; doesn't do anything in --network host)
-    EXPOSE {rendered_script.split('FROM_PORT = ')[1].split()[0]}
-
-    CMD ["python", "proxy.py"]
-    """.strip()
-
-
-
-    try:
-        # Step 1: Create remote folder
-        log.info(f"📁 Creating remote folder: {folder}")
-        run_remote_command(ssh, f"mkdir -p {folder}")
-
-        # Step 2: Upload files
-        with tempfile.NamedTemporaryFile("w", delete=False) as tmp_py:
-            tmp_py.write(rendered_script)
-            proxy_path = tmp_py.name
-
-        with tempfile.NamedTemporaryFile("w", delete=False) as tmp_df:
-            tmp_df.write(dockerfile)
-            dockerfile_path = tmp_df.name
-
-        sftp = ssh.open_sftp()
-        sftp.put(proxy_path, f"{folder}/proxy.py")
-        sftp.put(dockerfile_path, f"{folder}/Dockerfile")
-        sftp.chmod(f"{folder}/proxy.py", 0o755)
-        sftp.close()
-        os.remove(proxy_path)
-        os.remove(dockerfile_path)
-
-        log.info(f"✅ Proxy and Dockerfile uploaded to {folder}")
-
-        # Upload cert files
-        run_remote_command(ssh, f"mkdir -p {folder}/certs")
-        run_remote_command(ssh, f"cp /root/{service_name}/manager/*.pem {folder}/certs/")
-
-        image_name = f"proxy_{service_name}_image".lower()
-        screen_name = f"proxy_{service_name}"
-        log_file = f"{folder}/log_{screen_name}.txt"
-
-        # Step 3: Build Docker image
-        log.info(f"🐳 Building Docker image '{image_name}'")
-        build_output = run_remote_command(ssh, f"cd {folder} && docker build -t {image_name} .")
-        log.info(f"🐳 Build output:\n{build_output}")
-
-        # Step 4: Start container in screen
-        from_port = rendered_script.split('FROM_PORT = ')[1].split()[0]
-
-        # Do this right after the commit of compose changes
-        rolling_restart_docker_service(ssh, f"/root/{service_name}", [subservice])
-
-        start_cmd = (
-            f"screen -L -Logfile {log_file} "
-            f"-S {screen_name} -dm bash -lic 'cd {folder} && docker run -it --rm -p {from_port}:{from_port} {image_name}'"
-        )
-
-
-        log.info(f"🎬 Starting proxy container in screen: {screen_name}")
-        run_remote_command(ssh, start_cmd)
-
-        # Step 5: Verify screen started
-        screen_check = run_remote_command(ssh, f"screen -ls | grep {screen_name} || echo NOT_FOUND")
-        log.info(f"🔍 Screen status:\n{screen_check.strip()}")
-
-        # Step 6: Show last few lines of screen log
-        log_tail = run_remote_command(ssh, f"tail -n 10 {log_file} || echo '(no log file yet)'")
-        log.info(f"📝 Screen log (last 10 lines):\n{log_tail.strip()}")
-
-        return {"success": True, "message": f"Proxy Docker container launched for {service_name}"}
-
-    except Exception as e:
-        return {"success": False, "error": f"❌ Failed Docker proxy setup: {e}"}
 
 def reload_proxy_screen(ssh, service_name):
     screen_name = f"proxy_{service_name}"

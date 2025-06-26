@@ -158,20 +158,47 @@ def reset_docker():
 @app.route("/api/install_proxy", methods=["POST"])
 def install_proxy():
     data = request.get_json()
-    parent, sub = data.get("service"), data.get("subservice")
+
+    parent = data.get("service")
+    sub = data.get("subservice")
+    port = data.get("port", None)
+    tls_enabled = data.get("tlsEnabled", False)
+    server_cert = data.get("serverCert")
+    server_key = data.get("serverKey")
+    protocol = data.get("protocol", "http")
+    dump_pcaps = data.get("dumpPcaps", False)
+    pcap_path = data.get("pcapPath")
+    proxy_type = data.get("proxyType", "AngelPit")
+
     active_ssh = get_active_ssh()
 
+    #TODO: Multiple proxy for the same service?
     if is_proxy_installed(active_ssh, parent):
         return jsonify({"error": "Proxy already installed"}), 400
 
     service = get_service_by_name(parent)
-    result = install_proxy_for_service(active_ssh, config, parent, sub, service)
+
+    # Build a configuration dictionary to pass to the install function
+    proxy_config = {
+        "port": port,
+        "tls_enabled": tls_enabled,
+        "server_cert": server_cert,
+        "server_key": server_key,
+        "protocol": protocol,
+        "dump_pcaps": dump_pcaps,
+        "pcap_path": pcap_path,
+        "proxy_type": proxy_type,
+    }
+    log.info(f"Installing proxy for {parent} with config: {proxy_config}")
+    result = install_proxy_for_service(active_ssh, config, parent, sub, proxy_config)
+
     if result.get("success"):
         if service:
             service["proxied"] = True
         return jsonify({"message": "Proxy installed"})
-    
-    return jsonify({"error": result.get("error")}), 500
+
+    return jsonify({"error": result.get("error", "Unknown error")}), 500
+
 
 @app.route("/api/reload_proxy", methods=["POST"])
 def reload_proxy():

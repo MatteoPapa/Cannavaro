@@ -38,8 +38,8 @@ def ensure_remote_dependencies(ssh):
 
         commands = [
             "apt-get update -y",
-            "apt-get install -y zip rsync git screen python3-pip sslsplit",
-            "python3 -m pip install requests scapy",
+            "apt-get install -y zip rsync git screen python3-pip",
+            "python3 -m pip install requests scapy mitmproxy cachetools",
         ]
 
         for cmd in commands:
@@ -100,7 +100,7 @@ def run_remote_command(ssh, command, raise_on_error=False):
     stdin, stdout, stderr = ssh.exec_command(command)
     out = stdout.read().decode()
     err = stderr.read().decode()
-
+    log.info(f"Error output: {err.strip()}")
     if err.strip():
         log.warning(f"⚠️ {err.strip()}")
         if raise_on_error:
