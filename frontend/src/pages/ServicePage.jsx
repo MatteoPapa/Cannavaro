@@ -233,6 +233,7 @@ function ServicePage() {
                     onRestart={handleResetSubservice}
                     settingProxy={settingProxy}
                     setSettingProxy={setSettingProxy}
+                    setServiceIsProxy={setServiceIsProxy}
                   />
                 </Box>
               ))}

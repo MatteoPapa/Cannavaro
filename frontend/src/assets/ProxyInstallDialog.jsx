@@ -25,6 +25,7 @@ function ProxyInstallDialog({
   parent,
   subservice,
   setSettingProxy,
+  setServiceIsProxy,
 }) {
   const { showAlert } = useAlert();
   const [port, setPort] = useState("");
@@ -66,6 +67,7 @@ function ProxyInstallDialog({
       if (!res.ok) throw new Error(data.error || "Unknown error");
 
       showAlert?.(`Proxy installed for ${subservice}`, "success");
+      setServiceIsProxy(true);
       onClose();
     } catch (err) {
       showAlert?.(`Failed to install proxy: ${err.message}`, "error");

@@ -4,11 +4,14 @@ from time import time
 from math import modf
 from struct import pack
 from subprocess import Popen, PIPE
+from mitmproxy import ctx
+import socket  # at the top
+import ipaddress
 
-PCAP_FOLDER = 'pcaps'
 ROTATE_FLOW_COUNT = 50
-class Exporter:
+DEFAULT_PCAP_FOLDER = 'pcaps'
 
+class Exporter:
     def __init__(self):
         self.sessions = {}
 
@@ -26,7 +29,26 @@ class Exporter:
         self.write(data)
 
     def packet(self, src_host, src_port, dst_host, dst_port, payload):
-        key = '%s:%d-%s:%d' % (src_host, src_port, dst_host, dst_port)
+        # Resolve hostnames to IPv4
+        try:
+            src_ip = str(ipaddress.IPv4Address(src_host))
+        except ipaddress.AddressValueError:
+            try:
+                src_ip = socket.gethostbyname(src_host)
+            except Exception:
+                print(f"[⚠️] Cannot resolve source host: {src_host}")
+                return
+
+        try:
+            dst_ip = str(ipaddress.IPv4Address(dst_host))
+        except ipaddress.AddressValueError:
+            try:
+                dst_ip = socket.gethostbyname(dst_host)
+            except Exception:
+                print(f"[⚠️] Cannot resolve dest host: {dst_host}")
+                return
+
+        key = f"{src_ip}:{src_port}-{dst_ip}:{dst_port}"
         session = self.sessions.get(key)
         if session is None:
             session = {'seq': 1}
@@ -37,13 +59,13 @@ class Exporter:
         tcp_args = [src_port, dst_port, seq, 0, 0x50, 0x18, 0x0200, 0, 0]
         tcp = pack('>HHIIBBHHH', *tcp_args)
         ipv4_args = [0x45, 0, total, 0, 0, 0x40, 6, 0]
-        ipv4_args.extend(map(int, src_host.split('.')))
-        ipv4_args.extend(map(int, dst_host.split('.')))
+        ipv4_args.extend(map(int, src_ip.split('.')))
+        ipv4_args.extend(map(int, dst_ip.split('.')))
         ipv4 = pack('>BBHHHBBHBBBBBBBB', *ipv4_args)
         link = b'\x00' * 12 + b'\x08\x00'
 
         usec, sec = modf(time())
-        usec = int(usec * 1000 * 1000)
+        usec = int(usec * 1000000)
         sec = int(sec)
         size = len(link) + len(ipv4) + len(tcp) + len(payload)
         head = pack('<IIII', sec, usec, size, size)
@@ -58,12 +80,13 @@ class Exporter:
     def packets(self, src_host, src_port, dst_host, dst_port, payload):
         limit = 40960
         for i in range(0, len(payload), limit):
-            self.packet(src_host, src_port,
-                        dst_host, dst_port,
-                        payload[i:i + limit])
+            self.packet(
+                src_host, src_port,
+                dst_host, dst_port,
+                payload[i:i + limit]
+            )
 
 class File(Exporter):
-
     def __init__(self, path):
         super().__init__()
         self.path = path
@@ -83,7 +106,6 @@ class File(Exporter):
         self.file.close()
 
 class Pipe(Exporter):
-
     def __init__(self, cmd):
         super().__init__()
         self.proc = Popen(shlex.split(cmd), stdin=PIPE)
@@ -100,14 +122,27 @@ class Pipe(Exporter):
         self.proc.poll()
 
 class Addon:
-
-    def __init__(self, createf=None):
+    def __init__(self):
         self.exporter = None
         self.flow_count = 0
         self.max_flows = ROTATE_FLOW_COUNT
-        self.output_dir = PCAP_FOLDER
+        self.output_dir = DEFAULT_PCAP_FOLDER
+        self._open_new_file_called = False
+
+    def load(self, loader):
+        loader.add_option(
+            name="pcap_output",
+            typespec=str,
+            default=DEFAULT_PCAP_FOLDER,
+            help="Folder to save PCAP files"
+        )
+
+    def configure(self, updated):
+        self.output_dir = ctx.options.pcap_output
         os.makedirs(self.output_dir, exist_ok=True)
-        self._open_new_file()
+        if not self._open_new_file_called:
+            self._open_new_file()
+            self._open_new_file_called = True
 
     def _open_new_file(self):
         timestamp = int(time())
@@ -121,15 +156,11 @@ class Addon:
             self.exporter.close()
         self._open_new_file()
 
-    def load(self, entry):
-        pass  # Already initialized exporter
-
     def done(self):
         if self.exporter:
             self.exporter.close()
 
     def response(self, flow):
-        # Skip IPv6
         client_addr = list(flow.client_conn.address)
         server_addr = list(flow.server_conn.address)
         client_ip = client_addr[0].replace('::ffff:', '')
@@ -150,7 +181,7 @@ class Addon:
             self._rotate_file()
 
     def export_request(self, client_addr, server_addr, r):
-        proto = '%s %s %s\r\n' % (r.method, r.path, r.http_version)
+        proto = f"{r.method} {r.path} {r.http_version}\r\n"
         payload = bytearray()
         payload.extend(proto.encode('ascii'))
         payload.extend(bytes(r.headers))
@@ -162,10 +193,10 @@ class Addon:
         headers = r.headers.copy()
         if r.http_version.startswith('HTTP/2'):
             headers.setdefault('content-length', str(len(r.raw_content)))
-            proto = '%s %s\r\n' % (r.http_version, r.status_code)
+            proto = f"{r.http_version} {r.status_code}\r\n"
         else:
             headers.setdefault('Content-Length', str(len(r.raw_content)))
-            proto = '%s %s %s\r\n' % (r.http_version, r.status_code, r.reason)
+            proto = f"{r.http_version} {r.status_code} {r.reason}\r\n"
 
         payload = bytearray()
         payload.extend(proto.encode('ascii'))
@@ -174,5 +205,4 @@ class Addon:
         payload.extend(r.raw_content)
         self.exporter.packets(*server_addr, *client_addr, payload)
 
-addons = [Addon(lambda: File('output.pcap'))]
-#addons = [Addon(lambda: Pipe('weer -'))]
+addons = [Addon()]

@@ -5,6 +5,7 @@ import ast
 import re
 import tempfile
 import os
+import shlex
 from utils.ssh_utils import run_remote_command
 from utils.services_utils import rolling_restart_docker_service
 from utils.logging_utils import log
@@ -78,7 +79,8 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
                 if len(parts) == 2:
                     host_port, container_port = map(int, parts)
                 elif len(parts) == 3:
-                    _, host_port, container_port = map(int, parts)
+                    host_port = int(parts[1])
+                    container_port = int(parts[2])
                 else:
                     return {"success": False, "error": f"Unrecognized port format: '{port}'"}
                 original_port = host_port
@@ -158,9 +160,13 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
             "--ssl-insecure",
             "-s angel_pit_proxy.py"
         ]
-        if proxy_config.get("dumpPcaps"):
-            mitm_command.append("-s angel_dumper.py")
 
+        if proxy_config.get("dump_pcaps"):
+            pcap_path = proxy_config.get("pcap_path") or "pcaps"
+            mitm_command.extend([
+                "-s angel_dumper.py",
+                f"--set pcap_output={shlex.quote(pcap_path)}"
+        ])
 
         launch_script = "#!/bin/bash\n\n" + " \\\n  ".join(mitm_command) + "\n"
         script_local_path = tempfile.NamedTemporaryFile("w", delete=False)

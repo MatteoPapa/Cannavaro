@@ -34,7 +34,8 @@ function SubserviceCard({
   onToggleLock,
   onRestart,
   settingProxy,
-  setSettingProxy 
+  setSettingProxy,
+  setServiceIsProxy,
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   return (
@@ -112,6 +113,7 @@ function SubserviceCard({
         parent={parent.name}
         subservice={service.name}
         setSettingProxy={setSettingProxy}
+        setServiceIsProxy={setServiceIsProxy}
       />
 
 
