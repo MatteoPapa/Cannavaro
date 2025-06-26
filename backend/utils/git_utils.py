@@ -98,7 +98,11 @@ def initialize_service_repo(ssh, config, svc):
             "node_modules/",
             "dist/",
             "build/",
-            "*.egg-info/"
+            "*.egg-info/",
+            "log_proxy_*",
+            "combined.pem",
+            "*.yml.bak",
+            "*_pcaps/"
         ]
         volumes_to_ignore.extend(default_ignores)
 

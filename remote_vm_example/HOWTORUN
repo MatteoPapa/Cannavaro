@@ -1,5 +1,5 @@
 docker build -t cannavaro-vm-test .
-docker run -it --rm -p 2222:2222 -p 8000:8000 -p 3113:3113 -p 80:80 -p 5000:5000 -p 4444:4444 -v /var/run/docker.sock:/var/run/docker.sock cannavaro-vm-test
+docker run -it --rm -p 2222:2222 -p 3113:3113 -p 80:80 -p 5000:5000 -p 4444:4444 -v /var/run/docker.sock:/var/run/docker.sock cannavaro-vm-test
 
 NEW SETUP:
 

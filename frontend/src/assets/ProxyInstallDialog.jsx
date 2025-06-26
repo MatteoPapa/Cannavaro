@@ -36,7 +36,7 @@ function ProxyInstallDialog({
   const [serverKey, setServerKey] = useState(`/root/${parent}/server-key.pem`);
   const [protocol, setProtocol] = useState("http");
   const [dumpPcaps, setDumpPcaps] = useState(false);
-  const [pcapPath, setPcapPath] = useState(`/home/user/pcap-files/service6`);
+  const [pcapPath, setPcapPath] = useState(`/home/user/pcap_files/service6`);
   const [proxyType, setProxyType] = useState("AngelPit");
 
   const [loading, setLoading] = useState(false);

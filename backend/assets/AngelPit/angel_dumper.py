@@ -7,8 +7,9 @@ from subprocess import Popen, PIPE
 from mitmproxy import ctx
 import socket  # at the top
 import ipaddress
+import errno
 
-ROTATE_FLOW_COUNT = 50
+ROTATE_FLOW_COUNT = 200
 DEFAULT_PCAP_FOLDER = 'pcaps'
 
 class Exporter:
@@ -90,14 +91,33 @@ class File(Exporter):
     def __init__(self, path):
         super().__init__()
         self.path = path
-        if os.path.exists(path):
-            self.file = open(path, 'ab')
+        self._open_file()
+
+    def _open_file(self):
+        if os.path.exists(self.path):
+            self.file = open(self.path, 'ab')
         else:
-            self.file = open(path, 'wb')
-            self.header()
+            self.file = open(self.path, 'wb')
+        self.file_inode = os.fstat(self.file.fileno()).st_ino  
+        if self.file.tell() == 0:
+            self.header() 
 
     def write(self, data):
-        self.file.write(data)
+        try:
+            # Check if file was deleted (inode mismatch)
+            if not os.path.exists(self.path) or os.stat(self.path).st_ino != self.file_inode:
+                print(f"[⚠️] PCAP file {self.path} was deleted. Recreating it.")
+                self.file.close()
+                self._open_file()
+
+            self.file.write(data)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                print(f"[❗] PCAP file disappeared, reopening: {self.path}")
+                self._open_file()
+                self.file.write(data)
+            else:
+                raise
 
     def flush(self):
         self.file.flush()
