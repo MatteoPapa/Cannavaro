@@ -51,7 +51,6 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
         if not compose_path:
             return {"success": False, "error": "Compose file not found in service directory."}
 
-        # Backup compose
         backup_path = f"{compose_path}.bak"
         run_remote_command(ssh, f"cp {compose_path} {backup_path}")
         raw_yaml = run_remote_command(ssh, f"cat {compose_path}")
@@ -67,13 +66,11 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
         adjusted_port = None
 
         if proxy_config.get("port"):
-            # Use custom port mapping
             original_port = int(proxy_config["port"])
             adjusted_port = original_port
             container_port = int(ports[0].split(":")[-1])
             updated_ports = [f"127.0.0.1:{original_port}:{container_port}"]
         else:
-            # Shift all exposed ports +6
             for port in ports:
                 parts = str(port).split(":")
                 if len(parts) == 2:
@@ -89,19 +86,15 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
 
         service_def["ports"] = updated_ports
 
-        # 🔐 Port usage check for adjusted_port (proxy listen port)
         port_check_cmd = f"ss -tuln | grep ':{adjusted_port} ' || true"
         port_check_result = run_remote_command(ssh, port_check_cmd).strip()
-
         if port_check_result:
             return {"success": False, "error": f"Port {adjusted_port} is already in use on the remote host."}
 
-        # Update compose file
         new_yaml = yaml.dump(compose_data)
         escaped = new_yaml.replace("'", "'\\''")
         run_remote_command(ssh, f"echo '{escaped}' > {compose_path}")
 
-        # Commit the change
         commit_msg = f"Install proxy: moved ports for subservice {subservice}"
         run_remote_command(ssh, f"""
             cd {service_path} && \
@@ -109,7 +102,6 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
             git commit -m '{commit_msg}'
         """)
 
-        # Copy proxy template folder (AngelPit)
         local_proxy_dir = os.path.join(os.path.dirname(__file__), "../assets/AngelPit")
         if not os.path.isdir(local_proxy_dir):
             return {"success": False, "error": "Proxy template folder AngelPit not found."}
@@ -123,52 +115,31 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
             remote_path = posixpath.join(remote_proxy_dir, filename)
             sftp.put(local_path, remote_path)
 
-        # Combine cert and key into combined.pem
-               # Combine cert and key into combined.pem
-        log.info(f"Proxy configuration: {proxy_config}")
-
+        # 🔐 Handle TLS
         if proxy_config.get("tls_enabled"):
             cert_path = proxy_config.get("server_cert")
             key_path = proxy_config.get("server_key")
-            log.info(f"Using cert: {cert_path}, key: {key_path}")
-
-            cert_path = proxy_config.get("server_cert")
-            key_path = proxy_config.get("server_key")
             combined_remote_path = posixpath.join(remote_proxy_dir, "combined.pem")
-
-            log.info(f"Combining cert and key on remote: {cert_path}, {key_path} -> {combined_remote_path}")
-
             run_remote_command(ssh, f"cat {cert_path} {key_path} > {combined_remote_path}")
 
-
-        # Create launch script
+        # 🔄 Proxy Launch Script
         protocol = proxy_config["protocol"]
         if proxy_config.get("tls_enabled"):
             protocol = {"http": "https", "tcp": "tls"}.get(protocol, protocol)
 
-        if config["remote_host"] == "host.docker.internal":
-            address = "host.docker.internal"
-        else:
-            address = "127.0.0.1"
+        address = "host.docker.internal" if config["remote_host"] == "host.docker.internal" else "127.0.0.1"
 
         mitm_command = [
-            "mitmdump",
+            "SSLKEYLOGFILE=mitmkeys.log mitmdump",
             f"--mode reverse:{protocol}://{address}:{adjusted_port}",
             f"--listen-port {original_port}",
-            '--certs "*=combined.pem"',
+            '--certs "*=combined.pem"' if proxy_config.get("tls_enabled") else "",
             "--quiet",
             "--ssl-insecure",
             "-s angel_pit_proxy.py"
         ]
 
-        if proxy_config.get("dump_pcaps"):
-            pcap_path = proxy_config.get("pcap_path") or "pcaps"
-            mitm_command.extend([
-                "-s angel_dumper.py",
-                f"--set pcap_output={shlex.quote(pcap_path)}"
-        ])
-
-        launch_script = "#!/bin/bash\n\n" + " \\\n  ".join(mitm_command) + "\n"
+        launch_script = "#!/bin/bash\n\n" + " \\\n  ".join(filter(None, mitm_command)) + "\n"
         script_local_path = tempfile.NamedTemporaryFile("w", delete=False)
         script_local_path.write(launch_script)
         script_local_path.close()
@@ -179,20 +150,28 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
         os.remove(script_local_path.name)
         sftp.close()
 
-        # Restart container
+        # 🔁 Restart docker subservice
         rolling_restart_docker_service(ssh, service_path, [subservice])
 
-        # Launch proxy via screen
+        # Launch proxy in screen
         screen_name = f"proxy_{parent}"
         log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
         start_cmd = (
             f"screen -L -Logfile {log_file} "
             f"-S {screen_name} -dm bash -lic 'cd {remote_proxy_dir} && bash {os.path.basename(launch_remote_path)}'"
         )
+        run_remote_command(ssh, start_cmd, raise_on_error=True)
 
-        log.error(run_remote_command(ssh, start_cmd, raise_on_error=True))
+        # Start separate dumper screen
+        if proxy_config.get("dump_pcaps"):
+            pcap_path = proxy_config.get("pcap_path", "pcaps")
+            dumper_cmd = (
+                f"screen -S dumper_{parent} -dm bash -c "
+                f"'cd {remote_proxy_dir} && /usr/bin/python3 angel_dumper.py {adjusted_port} {pcap_path}'"
+            )
+            run_remote_command(ssh, dumper_cmd, raise_on_error=True)
 
-        # Final git commit for proxy script
+        # Final commit
         run_remote_command(ssh, f"""
             cd {service_path} && \
             git add {os.path.basename(compose_path)} && \

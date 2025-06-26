@@ -37,9 +37,10 @@ def ensure_remote_dependencies(ssh):
         log.info("📦 Ensuring dependencies are installed on remote VM...")
 
         commands = [
-            "apt-get update -y",
-            "apt-get install -y zip rsync git screen python3-pip",
-            "python3 -m pip install requests scapy mitmproxy cachetools",
+            "DEBIAN_FRONTEND=noninteractive apt-get update -y && "
+            "DEBIAN_FRONTEND=noninteractive apt-get install -y "
+            "zip rsync git screen python3-pip tshark tcpdump && "
+            "python3 -m pip install mitmproxy cachetools"
         ]
 
         for cmd in commands:

@@ -151,28 +151,26 @@ function ProxyInstallDialog({
                 value={serverKey}
                 onChange={(e) => setServerKey(e.target.value)}
               />
-            </>
-          )}
-
-          <FormControlLabel
-            control={
-              <Checkbox
-                size="small"
-                checked={dumpPcaps}
-                onChange={(e) => setDumpPcaps(e.target.checked)}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={dumpPcaps}
+                    onChange={(e) => setDumpPcaps(e.target.checked)}
+                  />
+                }
+                sx={{ width: "fit-content" }}
+                label="Dump pcaps"
               />
-            }
-            sx={{ width: "fit-content" }}
-            label="Dump pcaps"
-          />
-
-          {dumpPcaps && (
-            <TextField
-              label="PCAPs Output Path"
-              size="small"
-              value={pcapPath}
-              onChange={(e) => setPcapPath(e.target.value)}
-            />
+              {dumpPcaps && (
+                <TextField
+                  label="PCAPs Output Path"
+                  size="small"
+                  value={pcapPath}
+                  onChange={(e) => setPcapPath(e.target.value)}
+                />
+              )}
+            </>
           )}
         </Box>
       </DialogContent>

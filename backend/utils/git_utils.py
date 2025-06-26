@@ -102,7 +102,8 @@ def initialize_service_repo(ssh, config, svc):
             "log_proxy_*",
             "combined.pem",
             "*.yml.bak",
-            "*_pcaps/"
+            "*_pcaps/",
+            "mitmkeys.log",
         ]
         volumes_to_ignore.extend(default_ignores)
 
