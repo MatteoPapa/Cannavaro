@@ -75,23 +75,6 @@ function ProxyActionsCard({ showAlert, service }) {
     }
   };
 
-  const handleReloadProxy = async () => {
-    try {
-      const res = await fetch("/api/reload_proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service: service.name }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unknown error");
-
-      showAlert(`Proxy for ${service.name} reloaded successfully.`, "success");
-    } catch (err) {
-      showAlert(`Failed to reload proxy: ${err.message}`, "error");
-    }
-  };
-
   const fetchProxyLogs = useCallback(async () => {
     try {
       const response = await fetch("/api/get_proxy_logs", {
@@ -149,6 +132,8 @@ function ProxyActionsCard({ showAlert, service }) {
     } catch (err) {
       console.error("Error fetching proxy code:", err);
       showAlert(`Failed to fetch proxy code: ${err.message}`, "error");
+      // 👇 prevent repeated retries
+      refetchCodeFromServer.current = false;
     }
   }, [service.name, showAlert]);
 
@@ -183,8 +168,7 @@ function ProxyActionsCard({ showAlert, service }) {
       if (refetchCodeFromServer.current) {
         fetchProxyCode();
       }
-    }
-    else {
+    } else {
       refetchCodeFromServer.current = true;
     }
 
@@ -224,24 +208,17 @@ function ProxyActionsCard({ showAlert, service }) {
     >
       <CardContent>
         {/* Action buttons */}
-        <Box display="flex" width="100%" gap={2} mb={2}>
+        <Box display="flex" justifyContent="center" mb={2}>
           <Button
             variant="outlined"
             onClick={handleSaveChanges}
-            color="customGray"
-            sx={{ flex: 1 }}
-          >
-            <SaveIcon sx={{ mr: 1 }} />
-            Save Changes
-          </Button>
-          <Button
-            variant="outlined"
             color="secondary"
-            onClick={handleReloadProxy}
-            sx={{ flex: 1 }}
+            sx={{
+              width: "60%",
+            }}
           >
             <CachedIcon sx={{ mr: 1 }} />
-            Reload Proxy
+            Save & Reload Proxy
           </Button>
         </Box>
 

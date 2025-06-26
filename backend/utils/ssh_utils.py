@@ -100,7 +100,7 @@ def run_remote_command(ssh, command, raise_on_error=False):
     stdin, stdout, stderr = ssh.exec_command(command)
     out = stdout.read().decode()
     err = stderr.read().decode()
-    log.info(f"Error output: {err.strip()}")
+
     if err.strip():
         log.warning(f"⚠️ {err.strip()}")
         if raise_on_error:

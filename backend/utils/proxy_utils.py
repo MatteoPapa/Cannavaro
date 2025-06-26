@@ -37,7 +37,7 @@ def is_proxy_installed(ssh, service_name):
     Checks if the proxy file for the given service already exists on the VM.
     """
     remote_path = f"/root/{service_name}/proxy_folder_{service_name}"
-    stdin, stdout, stderr = ssh.exec_command(f"test -f {remote_path} && echo exists || echo missing")
+    stdin, stdout, stderr = ssh.exec_command(f"test -d {remote_path} && echo exists || echo missing")
     output = stdout.read().decode().strip()
     log.info(f"Proxy check for {service_name}: {output}")
     return output == "exists"
@@ -199,23 +199,6 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
         run_remote_command(ssh, f"mv {backup_path} {compose_path}")
         return {"success": False, "error": f"Failed to install proxy: {e}"}
 
-def reload_proxy_screen(ssh, service_name):
-    screen_name = f"proxy_{service_name}"
-    log.info(f"Sending reload signal to proxy screen: {screen_name}")
-    # Check if screen exists
-    check_cmd = f"screen -list | grep {screen_name}"
-
-    output = run_remote_command(ssh, check_cmd).strip()
-    if screen_name not in output:
-        log.error(f"No running screen session found for {screen_name}")
-        return {"success": False, "error": f"No running screen session for {screen_name}"}
-    
-    # Send reload signal
-    cmd = f"screen -S {screen_name} -X stuff 'r\\n'"
-    run_remote_command(ssh, cmd)
-
-    return {"success": True, "message": f"Reload signal sent to proxy {screen_name}"}
-
 def get_logs(ssh, service_name):
     log_path = f"/root/{service_name}/proxy_folder_{service_name}/log_proxy_{service_name}.txt"
     tmp_path = f"/root/{service_name}/proxy_folder_{service_name}/log_tmp.txt"
@@ -242,75 +225,41 @@ logger_marker = "#PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE"
 
 def get_code(ssh, service_name):
     """
-    Extract the editable portions of the proxy code between placeholder markers.
+    Retrieve the full contents of the angel_filters.py file for editing.
     """
-    code_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy.py"
+    code_path = f"/root/{service_name}/proxy_folder_{service_name}/angel_filters.py"
 
     try:
         stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
-        full_code = stdout.read().decode()
+        code = stdout.read().decode()
+        err = stderr.read().decode()
 
-        # Split by markers
-        parts = full_code.split(logger_marker)
-        if len(parts) < 4:
-            return {"success": False, "error": "Code format error: Not enough marker sections"}
-
-        # Extract modifiable blocks (settings and filters)
-        settings_block = parts[1].strip()
-        filters_block = parts[3].strip()
-
-        # Combine them for editing
-        code = f"{settings_block}\n{logger_marker}\n{filters_block}"
+        if err.strip():
+            return {"success": False, "error": err.strip()}
 
         return {"success": True, "code": code}
-
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-def save_code(ssh, service_name, new_partial_code):
+def save_code(ssh, service_name, new_code):
     """
-    Replace the editable portions of the proxy code using new content.
+    Overwrite the angel_filters.py file with new content.
     """
-    code_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy.py"
-
+    code_path = f"/root/{service_name}/proxy_folder_{service_name}/angel_filters.py"
 
     try:
-        # Read full original code
-        stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
-        full_code = stdout.read().decode()
-
-        parts = full_code.split(logger_marker)
-        if len(parts) < 4:
-            return {"success": False, "error": "Original code is missing expected marker sections"}
-
-        # Parse new editable sections
-        new_parts = new_partial_code.split(logger_marker)
-        if len(new_parts) < 2:
-            return {"success": False, "error": "New code must contain both sections separated by the marker"}
-
-        new_settings = new_parts[0].strip()
-        new_filters = new_parts[1].strip()
-
-        # Reconstruct full code
-        updated_code = (
-            f"{parts[0].rstrip()}\n{logger_marker}\n"
-            f"{new_settings}\n{logger_marker}\n"
-            f"{parts[2].strip()}\n{logger_marker}\n"
-            f"{new_filters}\n{logger_marker}\n"
-            f"{parts[4].lstrip()}"
-        )
-
-        # Validate code syntax
+        # Validate syntax before saving
         try:
-            compile(updated_code, "<string>", "exec")
+            compile(new_code, "<string>", "exec")
         except SyntaxError as e:
             return {"success": False, "error": f"Syntax error in updated code: {e}"}
 
-        # Upload to remote
+        # Write to temp file
         with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
-            tmp.write(updated_code)
+            tmp.write(new_code)
             tmp_path = tmp.name
 
+        # Upload to remote
         sftp = ssh.open_sftp()
         sftp.put(tmp_path, code_path)
         sftp.chmod(code_path, 0o755)
@@ -318,20 +267,19 @@ def save_code(ssh, service_name, new_partial_code):
         os.remove(tmp_path)
 
         # Git commit
-        commit_msg = "Update proxy code (partial edit)"
+        commit_msg = "Update angel_filters.py"
         run_remote_command(ssh, f"""
             cd /root/{service_name} && \
-            git add proxy_folder_{service_name}/proxy.py && \
+            git add proxy_folder_{service_name}/angel_filters.py && \
             git commit -m '{commit_msg}'
         """)
 
-        return {"success": True, "message": "Partial code saved and committed successfully"}
-
+        return {"success": True, "message": "Code saved successfully"}
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 def get_regex(ssh, service_name):
-    regex_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy.py"
+    regex_path = f"/root/{service_name}/proxy_folder_{service_name}/angel_filters.py"
 
     try:
         stdin, stdout, stderr = ssh.exec_command(f"cat {regex_path}")
@@ -345,7 +293,7 @@ def get_regex(ssh, service_name):
         for node in ast.walk(tree):
             if isinstance(node, ast.Assign):
                 for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "REGEX_MASKS":
+                    if isinstance(target, ast.Name) and target.id == "ALL_REGEXES":
                         if isinstance(node.value, ast.List):
                             for elt in node.value.elts:
                                 if isinstance(elt, ast.Bytes):
@@ -354,28 +302,27 @@ def get_regex(ssh, service_name):
         return {"success": True, "regex": regex_values}
     except Exception as e:
         return {"success": False, "error": str(e)}
-    
-def save_regex(ssh, service_name, new_regex_list):
-    code_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy.py"
 
+def save_regex(ssh, service_name, new_regex_list):
+    code_path = f"/root/{service_name}/proxy_folder_{service_name}/angel_filters.py"
 
     try:
-        # Step 1: Read existing code
+        # Read existing code
         stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
         code = stdout.read().decode()
 
-        # Step 2: Build new REGEX_MASKS string
+        # Build new ALL_REGEXES string
         formatted_items = [f"    {repr(r.encode())}" for r in new_regex_list]
-        new_block = "REGEX_MASKS = [\n" + ",\n".join(formatted_items) + "\n]"
+        new_block = "ALL_REGEXES = [\n" + ",\n".join(formatted_items) + "\n]"
 
-        # Step 3: Replace REGEX_MASKS in the code
-        regex_pattern = r'(?m)^REGEX_MASKS\s*=\s*\[(?:.*?\n)*?\]'
+        # Replace ALL_REGEXES in the code
+        regex_pattern = r'ALL_REGEXES\s*=\s*\[(?:[^\]]*?)\]'
         new_code, count = re.subn(regex_pattern, new_block, code, flags=re.DOTALL)
 
         if count == 0:
-            return {"success": False, "error": "REGEX_MASKS not found in file"}
+            return {"success": False, "error": "ALL_REGEXES not found in file"}
 
-        # Step 4: Validate syntax
+        # Validate syntax
         try:
             compile(new_code, "<string>", "exec")
         except SyntaxError as e:
@@ -383,8 +330,8 @@ def save_regex(ssh, service_name, new_regex_list):
                 "success": False,
                 "error": f"Syntax error in code: {e}"
             }
-        
-        # Step 5: Write to temp file and upload
+
+        # Write to temp file and upload
         with tempfile.NamedTemporaryFile("w", delete=False) as tmp:
             tmp.write(new_code)
             tmp_path = tmp.name
@@ -395,11 +342,11 @@ def save_regex(ssh, service_name, new_regex_list):
         sftp.close()
         os.remove(tmp_path)
 
-        # Step 6: Git commit
-        commit_msg = "Update REGEX_MASKS"
+        # Git commit
+        commit_msg = "Update ALL_REGEXES"
         run_remote_command(ssh, f"""
             cd /root/{service_name} && \
-            git add proxy_folder_{service_name}/proxy.py && \
+            git add proxy_folder_{service_name}/angel_filters.py && \
             git commit -m '{commit_msg}'
         """)
 

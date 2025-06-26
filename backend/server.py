@@ -200,18 +200,6 @@ def install_proxy():
     return jsonify({"error": result.get("error", "Unknown error")}), 500
 
 
-@app.route("/api/reload_proxy", methods=["POST"])
-def reload_proxy():
-    data = request.get_json()
-    service = data.get("service")
-    active_ssh = get_active_ssh()
-
-    if not is_proxy_installed(active_ssh, service):
-        return jsonify({"error": "Proxy not installed"}), 400
-
-    result = reload_proxy_screen(active_ssh, service)
-    return jsonify(result)
-
 @app.route("/api/get_proxy_logs", methods=["POST"])
 def get_proxy_logs():
     data = request.get_json()

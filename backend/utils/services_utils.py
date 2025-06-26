@@ -59,14 +59,15 @@ def list_vm_services_with_ports(ssh, root_dir="/root"):
         pem_result = stdout.read().decode().strip()
         service_obj["tls"] = bool(pem_result)
 
-        # Check for proxy file
-        proxy_filename = f"proxy_folder_{folder_name}/proxy.py"
-        log.info(f"Checking for proxy file: {proxy_filename} in {folder_path}")
-        check_cmd = f"test -f {folder_path}/{proxy_filename}"
+        # Check for proxy folder
+        proxy_folder_name = f"proxy_folder_{folder_name}"
+        log.info(f"Checking for proxy folder: {proxy_folder_name} in {folder_path}")
+        check_cmd = f"test -d {folder_path}/{proxy_folder_name}"
         stdin, stdout, stderr = ssh.exec_command(check_cmd)
         exit_status = stdout.channel.recv_exit_status()
-        log.info(f"Proxy file check exit status: {exit_status}")
+        log.info(f"Proxy folder check exit status: {exit_status}")
         service_obj["proxied"] = (exit_status == 0)
+
 
         if not compose_content:
             log.warning(f"⚠️ No compose file found in {folder_name}")
