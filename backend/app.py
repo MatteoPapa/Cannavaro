@@ -3,7 +3,7 @@ from utils.ssh_utils import ssh_connect, ensure_remote_dependencies, setup_ssh_a
 from utils.git_utils import setup_ssh_key, initialize_all_repos
 from utils.services_utils import initialize_services
 from server import set_dependencies, run_server
-import atexit
+from utils.logging_utils import log
 
 BASE_DIR = os.path.dirname(__file__)
 SERVICES_YAML_PATH = os.path.join(BASE_DIR, 'services.yaml')
@@ -13,7 +13,7 @@ def load_config():
     with open(CONFIG_YAML_PATH, "r") as f:
         return yaml.safe_load(f)
     
-def save_config(config):
+def save_services_config(config):
     with open(SERVICES_YAML_PATH, "w") as f:
         yaml.safe_dump(config['services'], f)
 
@@ -25,24 +25,27 @@ def main():
     if not ssh:
         exit(1)
     
-    ensure_remote_dependencies(ssh)
-    setup_ssh_authorized_key(ssh, config)
+    if not os.path.exists(SERVICES_YAML_PATH):
+        ensure_remote_dependencies(ssh)
+        setup_ssh_authorized_key(ssh, config)
+
+        # --- Parse services ----------
+        initialize_services(ssh, config, SERVICES_YAML_PATH)
+
+        # --- Git Setup ---------------
+        setup_ssh_key(ssh, config)
+        initialize_all_repos(ssh, config)
+    else:
+        log.info("✅ services.yaml found. Skipping remote setup, service initialization, and git setup.")
     # -----------------------------
 
-    # --- Parse services ----------
-    initialize_services(ssh, config, SERVICES_YAML_PATH)
-    
-    # --- Git Setup ---------------
-    setup_ssh_key(ssh, config)
-    initialize_all_repos(ssh, config)
-    # -----------------------------
-
-    # ---- Run Web Server -----------
+    # ---- Run Web Server ---------
     set_dependencies(config, ssh)
     run_server()
     
-    save_config(config)
+    save_services_config(config)
     ssh.close()
+
 
 if __name__ == "__main__":
     main()

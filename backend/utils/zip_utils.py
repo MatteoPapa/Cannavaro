@@ -3,6 +3,7 @@ import zipfile
 import os
 import datetime
 from utils.logging_utils import log
+import threading
 
 def setup_zip_dirs(base_dir):
     startup_zip_path = os.path.join(base_dir, 'home_backup_startup.zip')
@@ -22,8 +23,31 @@ def create_and_download_zip(ssh, base_dir, filename="home_backup.zip"):
     ssh.exec_command(f'rm -f {remote_zip_path}')
     
     zip_cmd = f'cd {remote_dir_to_zip} && zip -r {filename} *'
-    stdin, stdout, stderr = ssh.exec_command(zip_cmd)
-    stdout.channel.recv_exit_status()
+    
+    result = {}
+
+    def run_zip():
+        try:
+            stdin, stdout, stderr = ssh.exec_command(zip_cmd)
+            stdout.channel.recv_exit_status()
+            result['status'] = 'success'
+        except Exception as e:
+            result['status'] = 'error'
+            result['error'] = str(e)
+
+    thread = threading.Thread(target=run_zip)
+    thread.start()
+    thread.join(timeout=5)
+
+    if thread.is_alive():
+        log.error("❌ Remote zip creation took too long (over 5 seconds). Aborting.")
+        # Optional: clean up potentially partial zip
+        ssh.exec_command(f'rm -f {remote_zip_path}')
+        return None
+
+    if result.get('status') == 'error':
+        log.error(f"❌ Failed to run zip command: {result.get('error')}")
+        return None
 
     sftp = ssh.open_sftp()
     try:
@@ -40,10 +64,11 @@ def create_and_download_zip(ssh, base_dir, filename="home_backup.zip"):
     try:
         sftp.remove(remote_zip_path)
     except Exception as e:
-        print(f"⚠️ Warning: Failed to delete remote zip file: {e}")
+        log.warning(f"⚠️ Failed to delete remote zip file: {e}")
 
     sftp.close()
     return local_zip_path
+
 
 def create_timestamped_filename():
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
