@@ -194,6 +194,19 @@ function ProxyActionsCard({ showAlert, service }) {
     };
   }, [tabIndex, fetchProxyLogs, fetchProxyCode, fetchProxyRegex, service.name]);
 
+  // CTRL + S to save changes
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        handleSaveChanges();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleSaveChanges]);
+
   return (
     <Card
       variant="outlined"
