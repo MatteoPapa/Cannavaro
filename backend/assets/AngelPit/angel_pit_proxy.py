@@ -1,11 +1,9 @@
 ########## IMPORTS ##########
 
 import logging
-import re
 import os
-import time
 import importlib
-import angel_filters
+import proxy_filters
 from mitmproxy import http, tcp
 from cachetools import TTLCache
 
@@ -44,14 +42,14 @@ logger.addHandler(handler)
 
 ########## FILTER HOT-RELOAD ##########
 
-FILTERS_PATH = os.path.abspath(angel_filters.__file__)
+FILTERS_PATH = os.path.abspath(proxy_filters.__file__)
 LAST_FILTERS_MTIME = os.path.getmtime(FILTERS_PATH)
 
 def maybe_reload_filters():
     global LAST_FILTERS_MTIME
     current_mtime = os.path.getmtime(FILTERS_PATH)
     if current_mtime != LAST_FILTERS_MTIME:
-        importlib.reload(angel_filters)
+        importlib.reload(proxy_filters)
         LAST_FILTERS_MTIME = current_mtime
         logger.success("[♻️] Reloaded filters.py")
 
@@ -76,7 +74,7 @@ class FlowContext:
             body = flow.response.raw_content or b""
             self.raw_response = status_line + headers + b"\r\n" + body
 
-            self.session_id = angel_filters.find_session_id(flow)
+            self.session_id = proxy_filters.find_session_id(flow)
 
         elif self.type == "tcp":
             self.raw_request = b"".join(m.content for m in flow.messages if m.from_client)
@@ -92,14 +90,14 @@ class ProxyAddon:
         maybe_reload_filters()
         ctx = FlowContext(flow)
 
-        if angel_filters.TRACK_HTTP_SESSION and ctx.session_id:
+        if proxy_filters.TRACK_HTTP_SESSION and ctx.session_id:
             logger.debug(f"[📦] Session ID: {ctx.session_id}")
-            if angel_filters.ALL_SESSIONS.get(ctx.session_id):
-                angel_filters.replace_flag(ctx.flow)
+            if proxy_filters.ALL_SESSIONS.get(ctx.session_id):
+                proxy_filters.replace_flag(ctx.flow)
                 return
 
         try:
-            for f in angel_filters.FILTERS:
+            for f in proxy_filters.FILTERS:
                 f(ctx)
         except Exception as e:
             logger.error(f"[❌] Filter error: {e}")
@@ -110,7 +108,7 @@ class ProxyAddon:
         logger.info(f"[📥] TCP message ({len(flow.messages)} messages)")
 
         try:
-            for f in angel_filters.FILTERS:
+            for f in proxy_filters.FILTERS:
                 f(ctx)
         except Exception as e:
             logger.error(f"[❌] TCP Filter error: {e}")

@@ -5,7 +5,6 @@ import ast
 import re
 import tempfile
 import os
-import shlex
 from utils.ssh_utils import run_remote_command
 from utils.services_utils import rolling_restart_docker_service
 from utils.logging_utils import log
@@ -102,74 +101,22 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
             git commit -m '{commit_msg}'
         """)
 
-        local_proxy_dir = os.path.join(os.path.dirname(__file__), "../assets/AngelPit")
-        if not os.path.isdir(local_proxy_dir):
-            return {"success": False, "error": "Proxy template folder AngelPit not found."}
-
-        remote_proxy_dir = f"{service_path}/proxy_folder_{parent}"
-        run_remote_command(ssh, f"mkdir -p {remote_proxy_dir}")
-        sftp = ssh.open_sftp()
-
-        for filename in os.listdir(local_proxy_dir):
-            local_path = os.path.join(local_proxy_dir, filename)
-            remote_path = posixpath.join(remote_proxy_dir, filename)
-            sftp.put(local_path, remote_path)
-
-        # 🔐 Handle TLS
-        if proxy_config.get("tls_enabled"):
-            cert_path = proxy_config.get("server_cert")
-            key_path = proxy_config.get("server_key")
-            combined_remote_path = posixpath.join(remote_proxy_dir, "combined.pem")
-            run_remote_command(ssh, f"cat {cert_path} {key_path} > {combined_remote_path}")
-
-        # 🔄 Proxy Launch Script
-        protocol = proxy_config["protocol"]
-        if proxy_config.get("tls_enabled"):
-            protocol = {"http": "https", "tcp": "tls"}.get(protocol, protocol)
-
-        address = "host.docker.internal" if config["remote_host"] == "host.docker.internal" else "127.0.0.1"
-
-        mitm_command = [
-            "SSLKEYLOGFILE=mitmkeys.log mitmdump",
-            f"--mode reverse:{protocol}://{address}:{adjusted_port}",
-            f"--listen-port {original_port}",
-            '--certs "*=combined.pem"' if proxy_config.get("tls_enabled") else "",
-            "--quiet",
-            "--ssl-insecure",
-            "-s angel_pit_proxy.py"
-        ]
-
-        launch_script = "#!/bin/bash\n\n" + " \\\n  ".join(filter(None, mitm_command)) + "\n"
-        script_local_path = tempfile.NamedTemporaryFile("w", delete=False)
-        script_local_path.write(launch_script)
-        script_local_path.close()
-
-        launch_remote_path = posixpath.join(remote_proxy_dir, "launch_proxy.sh")
-        sftp.put(script_local_path.name, launch_remote_path)
-        sftp.chmod(launch_remote_path, 0o755)
-        os.remove(script_local_path.name)
-        sftp.close()
-
-        # 🔁 Restart docker subservice
-        rolling_restart_docker_service(ssh, service_path, [subservice])
-
-        # Launch proxy in screen
-        screen_name = f"proxy_{parent}"
-        log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
-        start_cmd = (
-            f"screen -L -Logfile {log_file} "
-            f"-S {screen_name} -dm bash -lic 'cd {remote_proxy_dir} && bash {os.path.basename(launch_remote_path)}'"
-        )
-        run_remote_command(ssh, start_cmd, raise_on_error=True)
-
-        # Start separate dumper screen
-        if proxy_config.get("dump_pcaps"):
-            pcap_path = proxy_config.get("pcap_path", "pcaps")
-            dumper_cmd = (
-                f"screen -S dumper_{parent} -dm bash -c "
-                f"'cd {remote_proxy_dir} && /usr/bin/python3 angel_dumper.py {adjusted_port} {pcap_path}'"
+        if proxy_config.get("proxy_type") == "AngelPit":
+            log.info("Installing AngelPit proxy")
+            result = install_angel_pit_proxy(
+                ssh, config, proxy_config, service_path,
+                parent, subservice, adjusted_port, original_port
             )
-            run_remote_command(ssh, dumper_cmd, raise_on_error=True)
+            if not result.get("success"):
+                return result
+        elif proxy_config.get("proxy_type") == "Mini-Proxad":
+            log.info("Installing Mini-Proxad proxy")
+            result = install_mini_proxad(
+                ssh, config, proxy_config, service_path,
+                parent, subservice, adjusted_port, original_port
+            )
+            if not result.get("success"):
+                return result
 
         # Final commit
         run_remote_command(ssh, f"""
@@ -183,6 +130,145 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
     except Exception as e:
         run_remote_command(ssh, f"mv {backup_path} {compose_path}")
         return {"success": False, "error": f"Failed to install proxy: {e}"}
+
+# ----- PROXY TYPES -----
+def render_template_file(template_path, replacements):
+    with open(template_path, "r") as f:
+        content = f.read()
+    for key, value in replacements.items():
+        placeholder = f"{{{{{key}}}}}"
+        content = content.replace(placeholder, str(value))
+    return content
+
+def install_angel_pit_proxy(ssh, config, proxy_config, service_path, parent, subservice, adjusted_port, original_port):
+    local_proxy_dir = os.path.join(os.path.dirname(__file__), "../assets/AngelPit")
+    if not os.path.isdir(local_proxy_dir):
+        return {"success": False, "error": "Proxy template folder AngelPit not found."}
+
+    remote_proxy_dir = f"{service_path}/proxy_folder_{parent}"
+    run_remote_command(ssh, f"mkdir -p {remote_proxy_dir}")
+    sftp = ssh.open_sftp()
+
+    for filename in os.listdir(local_proxy_dir):
+        local_path = os.path.join(local_proxy_dir, filename)
+        remote_path = posixpath.join(remote_proxy_dir, filename)
+        sftp.put(local_path, remote_path)
+
+    # 🔐 Handle TLS
+    if proxy_config.get("tls_enabled"):
+        cert_path = proxy_config.get("server_cert")
+        key_path = proxy_config.get("server_key")
+        combined_remote_path = posixpath.join(remote_proxy_dir, "combined.pem")
+        run_remote_command(ssh, f"cat {cert_path} {key_path} > {combined_remote_path}")
+
+    # 🔄 Proxy Launch Script
+    protocol = proxy_config["protocol"]
+    if proxy_config.get("tls_enabled"):
+        protocol = {"http": "https", "tcp": "tls"}.get(protocol, protocol)
+
+    address = "host.docker.internal" if config["remote_host"] == "host.docker.internal" else "127.0.0.1"
+
+    mitm_command = [
+        # "SSLKEYLOGFILE=mitmkeys.log mitmdump",
+        f"mitmdump --mode reverse:{protocol}://{address}:{adjusted_port}",
+        f"--listen-port {original_port}",
+        '--certs "*=combined.pem"' if proxy_config.get("tls_enabled") else "",
+        "--quiet",
+        "--ssl-insecure",
+        "-s angel_pit_proxy.py"
+    ]
+
+    if proxy_config.get("dump_pcaps"):
+        mitm_command.append("-s angel_dumper.py")
+        mitm_command.append(f"--set pcap_path={proxy_config.get('pcap_path', 'pcaps')}")
+        mitm_command.append(f"--set service_name={parent}")
+
+    launch_script = "#!/bin/bash\n\n" + " \\\n  ".join(filter(None, mitm_command)) + "\n"
+    script_local_path = tempfile.NamedTemporaryFile("w", delete=False)
+    script_local_path.write(launch_script)
+    script_local_path.close()
+
+    launch_remote_path = posixpath.join(remote_proxy_dir, "launch_proxy.sh")
+    sftp.put(script_local_path.name, launch_remote_path)
+    sftp.chmod(launch_remote_path, 0o755)
+    os.remove(script_local_path.name)
+    sftp.close()
+
+    # 🔁 Restart docker subservice
+    rolling_restart_docker_service(ssh, service_path, [subservice])
+
+    # Launch proxy in screen
+    screen_name = f"proxy_{parent}"
+    log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
+    start_cmd = (
+        f"screen -L -Logfile {log_file} "
+        f"-S {screen_name} -dm bash -lic 'cd {remote_proxy_dir} && bash {os.path.basename(launch_remote_path)}'"
+    )
+    run_remote_command(ssh, start_cmd, raise_on_error=True)
+
+    return {"success": True}
+
+import socket
+def install_mini_proxad(ssh, config, proxy_config, service_path, parent, subservice, adjusted_port, original_port):
+    local_proxy_dir = os.path.join(os.path.dirname(__file__), "../assets/Mini-Proxad")
+    if not os.path.isdir(local_proxy_dir):
+        return {"success": False, "error": "Proxy template folder Mini-Proxad not found."}
+
+    remote_proxy_dir = f"{service_path}/proxy_folder_{parent}"
+    run_remote_command(ssh, f"mkdir -p {remote_proxy_dir}")
+    sftp = ssh.open_sftp()
+
+    if config["remote_host"] == "host.docker.internal":
+        address = socket.gethostbyname("host.docker.internal")
+    else:
+        address = "127.0.0.1"
+
+    replacements = {
+        "SERVICE_NAME": parent,
+        "FROM_PORT": original_port,
+        "TO_PORT": adjusted_port,
+        "TO_IP": address,
+        "CERT_PATH": proxy_config.get("server_cert", ""),
+        "KEY_PATH": proxy_config.get("server_key", ""),
+        "TLS_ENABLED": str(proxy_config.get("tls_enabled", False)).lower(),
+        "DUMP_ENABLED": str(proxy_config.get("dump_pcaps", False)).lower(),
+        "DUMP_PATH": proxy_config.get("pcap_path", "pcaps"),
+    }
+
+    for filename in os.listdir(local_proxy_dir):
+        local_path = os.path.join(local_proxy_dir, filename)
+        remote_path = posixpath.join(remote_proxy_dir, filename)
+
+        if filename.endswith(".yaml") or filename.endswith(".yml"):
+            rendered = render_template_file(local_path, replacements)
+            with sftp.open(remote_path, 'w') as f:
+                f.write(rendered)
+        else:
+            sftp.put(local_path, remote_path)
+
+    # 🔐 TLS: concatenate cert + key if enabled
+    if proxy_config.get("tls_enabled"):
+        cert_path = proxy_config.get("server_cert")
+        key_path = proxy_config.get("server_key")
+        combined_remote_path = posixpath.join(remote_proxy_dir, "combined.pem")
+        run_remote_command(ssh, f"cat {cert_path} {key_path} > {combined_remote_path}")
+
+    # 🔁 Restart subservice container to ensure the proxy can bind to the target port
+    rolling_restart_docker_service(ssh, service_path, [subservice])
+
+    # ⏯️ Launch Mini-Proxad via screen
+    screen_name = f"proxy_{parent}"
+    log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
+    launch_cmd = (
+        f"screen -L -Logfile {log_file} "
+        f"-S {screen_name} -dm bash -lic 'chmod +x {remote_proxy_dir}/mini-proxad.bin && {remote_proxy_dir}/mini-proxad.bin --config {remote_proxy_dir}/config.yaml'"
+    )
+    run_remote_command(ssh, launch_cmd, raise_on_error=True)
+
+    sftp.close()
+    return {"success": True}
+
+# ----- COMMON FUNCTIONS -----
 
 def get_logs(ssh, service_name):
     log_path = f"/root/{service_name}/proxy_folder_{service_name}/log_proxy_{service_name}.txt"
@@ -206,13 +292,11 @@ def get_logs(ssh, service_name):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-logger_marker = "#PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE"
-
 def get_code(ssh, service_name):
     """
-    Retrieve the full contents of the angel_filters.py file for editing.
+    Retrieve the full contents of the proxy_filters.py file for editing.
     """
-    code_path = f"/root/{service_name}/proxy_folder_{service_name}/angel_filters.py"
+    code_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy_filters.py"
 
     try:
         stdin, stdout, stderr = ssh.exec_command(f"cat {code_path}")
@@ -228,9 +312,9 @@ def get_code(ssh, service_name):
 
 def save_code(ssh, service_name, new_code):
     """
-    Overwrite the angel_filters.py file with new content.
+    Overwrite the proxy_filters.py file with new content.
     """
-    code_path = f"/root/{service_name}/proxy_folder_{service_name}/angel_filters.py"
+    code_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy_filters.py"
 
     try:
         # Validate syntax before saving
@@ -252,10 +336,10 @@ def save_code(ssh, service_name, new_code):
         os.remove(tmp_path)
 
         # Git commit
-        commit_msg = "Update angel_filters.py"
+        commit_msg = "Update proxy_filters.py"
         run_remote_command(ssh, f"""
             cd /root/{service_name} && \
-            git add proxy_folder_{service_name}/angel_filters.py && \
+            git add proxy_folder_{service_name}/proxy_filters.py && \
             git commit -m '{commit_msg}'
         """)
 
@@ -264,7 +348,7 @@ def save_code(ssh, service_name, new_code):
         return {"success": False, "error": str(e)}
 
 def get_regex(ssh, service_name):
-    regex_path = f"/root/{service_name}/proxy_folder_{service_name}/angel_filters.py"
+    regex_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy_filters.py"
 
     try:
         stdin, stdout, stderr = ssh.exec_command(f"cat {regex_path}")
@@ -289,7 +373,7 @@ def get_regex(ssh, service_name):
         return {"success": False, "error": str(e)}
 
 def save_regex(ssh, service_name, new_regex_list):
-    code_path = f"/root/{service_name}/proxy_folder_{service_name}/angel_filters.py"
+    code_path = f"/root/{service_name}/proxy_folder_{service_name}/proxy_filters.py"
 
     try:
         # Read existing code
@@ -331,7 +415,7 @@ def save_regex(ssh, service_name, new_regex_list):
         commit_msg = "Update ALL_REGEXES"
         run_remote_command(ssh, f"""
             cd /root/{service_name} && \
-            git add proxy_folder_{service_name}/angel_filters.py && \
+            git add proxy_folder_{service_name}/proxy_filters.py && \
             git commit -m '{commit_msg}'
         """)
 

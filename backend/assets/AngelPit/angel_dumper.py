@@ -1,168 +1,183 @@
-#!/usr/bin/env python3
-from __future__ import annotations
+# unified_pcap_addon.py
 
-import argparse
-import datetime
-import glob
-import os
-import re
-import shlex
-import signal
-import subprocess
-import sys
-import tempfile
-import time
-from pathlib import Path
+from mitmproxy import ctx, http, tcp
+from scapy.all import Ether, IP, TCP, Raw, PcapWriter, PcapNgWriter
+import threading, datetime, time, shutil, os, logging
 
-# === CONFIGURATION ===
-MITM_KEYLOG = Path("mitmkeys.log")
-PCAP_DIR = Path("./encrypted_pcaps")
-DECRYPTED_PCAPS_PATH = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("dec_pcaps")
-INTERVAL = 10  # seconds
-INTERFACE = "any"
-PORT = sys.argv[1] if len(sys.argv) > 1 else "5001"
+INTERVAL = 30  # Interval to dump PCAP files in seconds
 
-LABELS = {
-    "CLIENT_RANDOM",
-    "CLIENT_EARLY_TRAFFIC_SECRET",
-    "CLIENT_HANDSHAKE_TRAFFIC_SECRET",
-    "SERVER_HANDSHAKE_TRAFFIC_SECRET",
-    "CLIENT_TRAFFIC_SECRET_0",
-    "SERVER_TRAFFIC_SECRET_0",
-    "EARLY_EXPORTER_SECRET",
-    "EXPORTER_SECRET",
-}
+# --- TCP/PCAP Dumper Thread ---
+class Dumper(threading.Thread):
+    def __init__(self, file_format, logger, service_name, dump_mode='pcap'):
+        super().__init__(daemon=True)
+        self.file_format = file_format
+        self.logger = logger
+        self.service_name = service_name
+        self.dump_mode = dump_mode
+        self.lock = threading.Lock()
+        self.lock.acquire()
 
-KEYLOG_RE = re.compile(
-    fr'({"|".join(LABELS)}) ([0-9a-fA-F]{{64}}) ([0-9a-fA-F]{{64,128}})'
-)
+    def open(self, file):
+        self.file = file
+        if self.dump_mode == 'pcapng':
+            self.pcap_writer = PcapNgWriter(self.file)
+        else:
+            self.pcap_writer = PcapWriter(self.file, append=True)
 
-# === UTILS ===
+    def write(self, pkt):
+        self.lock.acquire()
+        self.pcap_writer.write(pkt)
+        self.lock.release()
 
-def extract_pcap_randoms(pcap: Path) -> list:
-    cmd = f"tshark -r {pcap} -Y tls.handshake.type==1 -T fields -e tls.handshake.random"
-    print(f"[>] Running: {cmd}")  # verbose
-    try:
-        proc = subprocess.run(
-            shlex.split(cmd),
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return [r for r in proc.stdout.split() if len(r) == 64]
-    except subprocess.CalledProcessError as e:
-        print(f"[!] tshark failed:\nCommand: {e.cmd}\nExit code: {e.returncode}\nSTDERR:\n{e.stderr}")
-        raise
-    except Exception as e:
-        print(f"[!] Unexpected error while running tshark: {e}")
-        raise
+    def close(self):
+        self.pcap_writer.close()
 
-def extract_keylog_randoms(keylog: Path, pcap_randoms: list) -> list:
-    results = []
-    with open(keylog) as f:
-        for line in f:
-            match = KEYLOG_RE.fullmatch(line.strip())
-            if match and match.group(2) in pcap_randoms:
-                results.append(line)
-    return results
-
-def inject_secrets(pcap: Path, keylog: Path) -> None:
-    try:
-        pcap_randoms = extract_pcap_randoms(pcap)
-        keylog_randoms = extract_keylog_randoms(keylog, pcap_randoms)
-
-        if not keylog_randoms:
-            print("[!] No matching secrets found in keylog. Skipping decryption.")
-            return
-
-        DECRYPTED_PCAPS_PATH.mkdir(parents=True, exist_ok=True)
-        fullPath = DECRYPTED_PCAPS_PATH / f"service_{time.strftime('%Y%m%d_%H%M%S')}.pcap"
-
-        with tempfile.NamedTemporaryFile(mode='w+') as tmp:
-            tmp.write(''.join(keylog_randoms))
-            tmp.flush()
-            cmd = f"editcap --log-level info --discard-all-secrets --inject-secrets tls,{tmp.name} {pcap} {fullPath}"
-            print(f"[>] Running: {cmd}")  # verbose
-            try:
-                subprocess.run(
-                    shlex.split(cmd),
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                print(f"[+] Decrypted pcap saved to: {fullPath}")
-                with open(keylog, 'w'):
-                    pass  # Truncate
-                print(f"[+] Truncated {keylog}")
-            except subprocess.CalledProcessError as e:
-                print(f"[!] editcap failed:\nCommand: {e.cmd}\nExit code: {e.returncode}\nSTDERR:\n{e.stderr}")
-                raise
-    except Exception as e:
-        print(f"[!] inject_secrets() encountered an error:\n{e}")
-        raise
-
-def find_latest_pcap(pattern: str) -> Path | None:
-    files = glob.glob(pattern)
-    return max(files, key=os.path.getctime) if files else None
-
-def run_tcpdump_and_decrypt():
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_base = PCAP_DIR / f"capture_{timestamp}"
-
-    print(f"[+] Capturing traffic on port {PORT} for {INTERVAL} seconds -> {file_base}_00000.pcap")
-
-    tcpdump_cmd = [
-        "tcpdump",
-        "-i", INTERFACE,
-        "tcp", "port", PORT,
-        "-G", str(INTERVAL),
-        "-W", "1",
-        "-w", f"{file_base}_%Y%m%d_%H%M%S.pcap"
-    ]
-    print(f"[>] Running tcpdump: {' '.join(tcpdump_cmd)}")  # verbose
-
-    proc = subprocess.Popen(tcpdump_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-
-    try:
-        proc.wait()
-        stderr_output = proc.stderr.read().decode()
-        if proc.returncode != 0:
-            print(f"[!] tcpdump exited with code {proc.returncode}\nSTDERR:\n{stderr_output}")
-    except KeyboardInterrupt:
-        print("[!] Ctrl+C received, stopping tcpdump.")
-        proc.send_signal(signal.SIGINT)
-        proc.wait()
-        raise
-    except Exception as e:
-        print(f"[!] Error while running tcpdump: {e}")
-        raise
-
-    pcap_file = find_latest_pcap(str(file_base) + "_*.pcap")
-    if not pcap_file:
-        print("[!] No pcap file found after tcpdump.")
-        return
-
-    print(f"[+] Decrypting {pcap_file}")
-    try:
-        inject_secrets(Path(pcap_file), MITM_KEYLOG)
-        print(f"[+] Decryption complete. Removing original pcap: {pcap_file}")
-        os.remove(pcap_file)
-    except Exception as e:
-        print(f"[!] Decryption error: {e}")
-
-# === MAIN ===
-
-def main():
-    print("[*] Starting automated capture-decrypt loop.")
-    PCAP_DIR.mkdir(parents=True, exist_ok=True)
-
-    try:
+    def run(self):
         while True:
-            run_tcpdump_and_decrypt()
-    except KeyboardInterrupt:
-        print("\n[!] Stopping the loop.")
-    except Exception as e:
-        print(f"[!] Fatal error in main loop: {e}")
+            file = datetime.datetime.now().strftime(self.file_format)
+            tmp_file = f"/tmp/{self.service_name}_{os.path.basename(file)}.tmp"
+            self.open(tmp_file)
+            self.lock.release()
+            time.sleep(INTERVAL)
+            self.lock.acquire()
+            self.close()
+            shutil.move(tmp_file, file)
+            self.logger.info(f"[{self.service_name}] PCAP dumped: {file}")
 
-if __name__ == "__main__":
-    main()
+
+# --- TCP Packet Synthesizer ---
+class TCPDump:
+    default_ack = 1_000_000
+    default_seq = 1_000
+
+    def __init__(self, dumper, src, dst, sport, dport):
+        self.dumper = dumper
+        self.src = src
+        self.dst = dst
+        self.sport = sport
+        self.dport = dport
+        self.seq = self.default_seq
+        self.ack = 0
+        self.client = False
+        self.do_handshake()
+
+    def write_packet(self, seq, ack, client=True, data=None, mode='A'):
+        s, d, sp, dp = (self.src, self.dst, self.sport, self.dport) if client else (self.dst, self.src, self.dport, self.sport)
+        pkt = Ether(src="11:11:11:11:11:11", dst="22:22:22:22:22:22") / IP(src=s, dst=d) / TCP(sport=sp, dport=dp, flags=mode, seq=seq, ack=ack)
+        if data:
+            pkt /= Raw(load=data)
+        self.dumper.write(pkt)
+
+    def do_handshake(self):
+        self.write_packet(self.seq, self.ack, mode='S')
+        self.seq, self.ack = self.default_ack, self.seq + 1
+        self.write_packet(self.seq, self.ack, client=False, mode='SA')
+        self.seq, self.ack = self.ack, self.seq + 1
+        self.write_packet(self.seq, self.ack)
+
+    def close(self):
+        self.write_packet(self.seq, self.ack, client=True, mode='FA')
+        self.seq += 1
+        self.write_packet(self.ack, self.seq, client=False, mode='A')
+        self.write_packet(self.ack, self.seq, client=False, mode='FA')
+        self.ack += 1
+        self.write_packet(self.seq, self.ack, client=True, mode='A')
+
+    def add_packet(self, data, client=True):
+        self.write_packet(self.seq, self.ack, client=client, data=data, mode='PA')
+        self.seq, self.ack = self.ack, self.seq + len(data)
+        self.client = client
+
+
+# --- Mitmproxy Addon ---
+class UnifiedDumpAddon:
+    def __init__(self):
+        self.logger = None
+        self.dumper = None
+        self.connections = {}
+
+    def load(self, loader):
+        loader.add_option(
+            name="pcap_path",
+            typespec=str,
+            default="/tmp/pcaps",
+            help="Directory to store PCAP files",
+        )
+        loader.add_option(
+            name="service_name",
+            typespec=str,
+            default="default_service",
+            help="Service name for labeling dumps and logs",
+        )
+
+    def configure(self, updated):
+        path = ctx.options.pcap_path
+        service_name = ctx.options.service_name
+        os.makedirs(path, exist_ok=True)
+
+        if not self.logger:
+            self.logger = logging.getLogger(f"pcapdump.{service_name}")
+            self.logger.setLevel(logging.INFO)
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
+            self.logger.addHandler(handler)
+
+        if not self.dumper:
+            pcap_file_format = os.path.join(path, f"{service_name}_%Y%m%d_%H%M%S.pcap")
+            self.dumper = Dumper(pcap_file_format, self.logger, service_name)
+            self.dumper.start()
+
+    def request(self, flow: http.HTTPFlow):
+        key = (flow.client_conn.id, flow.server_conn.id)
+        tcpdump = TCPDump(
+            self.dumper,
+            flow.client_conn.address[0],
+            flow.server_conn.address[0],
+            flow.client_conn.address[1],
+            flow.server_conn.address[1],
+        )
+
+        http_request_line = f"{flow.request.method} {flow.request.path} {flow.request.http_version}\r\n".encode()
+        http_headers = b"".join(f"{k}: {v}\r\n".encode() for k, v in flow.request.headers.items())
+        http_body = flow.request.raw_content or b""
+        http_payload = http_request_line + http_headers + b"\r\n" + http_body
+        tcpdump.add_packet(http_payload, client=True)
+        self.connections[key] = tcpdump
+
+    def response(self, flow: http.HTTPFlow):
+        key = (flow.client_conn.id, flow.server_conn.id)
+        tcpdump = self.connections.pop(key, None)
+        if tcpdump:
+            http_response_line = f"{flow.response.http_version} {flow.response.status_code} {flow.response.reason}\r\n".encode()
+            http_headers = b"".join(f"{k}: {v}\r\n".encode() for k, v in flow.response.headers.items())
+            http_body = flow.response.raw_content or b""
+            http_payload = http_response_line + http_headers + b"\r\n" + http_body
+            tcpdump.add_packet(http_payload, client=False)
+            tcpdump.close()
+
+    def tcp_start(self, flow: tcp.TCPFlow):
+        key = (flow.client_conn.id, flow.server_conn.id)
+        self.logger.info(f"[{ctx.options.service_name}] TCP START {key}")
+        self.connections[key] = TCPDump(
+            self.dumper,
+            flow.client_conn.address[0],
+            flow.server_conn.address[0],
+            flow.client_conn.address[1],
+            flow.server_conn.address[1],
+        )
+
+    def tcp_message(self, flow: tcp.TCPFlow):
+        key = (flow.client_conn.id, flow.server_conn.id)
+        tcpdump = self.connections.get(key)
+        if tcpdump:
+            tcpdump.add_packet(flow.message.content, client=flow.message.from_client)
+
+    def tcp_end(self, flow: tcp.TCPFlow):
+        key = (flow.client_conn.id, flow.server_conn.id)
+        tcpdump = self.connections.pop(key, None)
+        if tcpdump:
+            tcpdump.close()
+            self.logger.info(f"[{ctx.options.service_name}] TCP END {key}")
+
+
+addons = [UnifiedDumpAddon()]

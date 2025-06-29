@@ -1,0 +1,34 @@
+# Service configuration
+service_name: {{SERVICE_NAME}}
+
+# The port and ip that the proxy will expose publicly
+# aliases: client_ip, client_port
+from_ip: 0.0.0.0
+from_port: {{FROM_PORT}}
+
+# The port and ip for the internal service
+# aliases: server_ip, server_port
+to_ip: {{TO_IP}}
+to_port: {{TO_PORT}}
+
+# The path to the python filter
+# This will be automatically reloaded
+script_path: /root/{{SERVICE_NAME}}/proxy_folder_{{SERVICE_NAME}}/proxy_filters.py
+
+# TLS configuration
+# If the tls_ca_file is present the proxy will authenticate the service
+tls_enabled: {{TLS_ENABLED}}
+tls_cert_file: {{CERT_PATH}}
+tls_key_file: {{KEY_PATH}}
+#tls_ca_file: ./test/keys/ca-cert.pem
+
+# Pcap dumper configuration
+# The dump_format acceps the following format values
+#   - {service} will be replaced with the service name
+#   - {timestamp} will be replaced with the time of the dump
+#   - {client_ip} {from_ip} will be replaced with the client_ip
+#   - {server_ip} {to_ip} will be replaced with the server_ip
+dump_enabled: {{DUMP_ENABLED}}
+dump_path: {{DUMP_PATH}}
+dump_format: "{service}_{server_port}_{timestamp}.pcap"
+dump_interval: 30s

@@ -1,14 +1,9 @@
-FROM ubuntu:24.04
+FROM python:3.12-slim
 
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Install system dependencies including pipx and Python tools
+# Install Docker, curl, SSH, etc.
 RUN apt-get update && \
-    apt-get install -y python3 python3-pip python3-venv pipx \
-    docker.io curl openssh-server iputils-ping net-tools vim zip rsync git screen && \
-    pipx ensurepath && \
-    pipx install scapy && \
-    pipx inject scapy requests && \
+    apt-get install -y docker.io curl openssh-server iputils-ping net-tools vim zip rsync git screen python3-pip&& \
+    pip install --no-cache-dir scapy requests && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Docker Compose v2 plugin

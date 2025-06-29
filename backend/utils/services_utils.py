@@ -189,3 +189,17 @@ def rolling_restart_docker_service(ssh, service_path, to_restart):
 
     return {"success": True, "restarted": to_restart}
 
+def load_services_from_yaml(path):
+    if not os.path.exists(path):
+        log.warning(f"⚠️ services.yaml not found at {path}")
+        return None
+    try:
+        with open(path, "r") as f:
+            data = yaml.safe_load(f)
+            if not data or "services" not in data:
+                log.warning("⚠️ services.yaml is missing the 'services' key.")
+                return None
+            return data["services"]
+    except Exception as e:
+        log.error(f"❌ Failed to load services.yaml: {e}")
+        return None

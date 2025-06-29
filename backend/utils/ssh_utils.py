@@ -32,27 +32,46 @@ def ssh_connect(config):
 def ensure_remote_dependencies(ssh):
     """
     Installs required packages on the remote VM using apt.
+    If Python is 3.12+, uses pipx instead of pip for tools.
     """
     try:
         log.info("📦 Ensuring dependencies are installed on remote VM...")
 
-        commands = [
+        # Install base dependencies + pipx support
+        base_cmd = (
             "DEBIAN_FRONTEND=noninteractive apt-get update -y && "
             "DEBIAN_FRONTEND=noninteractive apt-get install -y "
-            "zip rsync git screen python3-pip tshark tcpdump && "
-            "python3 -m pip install mitmproxy cachetools"
-        ]
+            "zip rsync git screen python3-pip python3-venv pipx tshark tcpdump"
+        )
+        stdin, stdout, stderr = ssh.exec_command(base_cmd)
+        if stdout.channel.recv_exit_status() != 0:
+            raise Exception(stderr.read().decode())
 
-        for cmd in commands:
-            stdin, stdout, stderr = ssh.exec_command(cmd)
-            exit_status = stdout.channel.recv_exit_status()
-            if exit_status != 0:
-                err = stderr.read().decode()
-                raise Exception(f"Failed to run '{cmd}': {err}")
+        # Determine Python version
+        stdin, stdout, stderr = ssh.exec_command("python3 --version")
+        version_output = stdout.read().decode().strip()
+        version = tuple(map(int, version_output.split()[1].split('.')[:2]))
+
+        if version >= (3, 12):
+            log.info(f"🐍 Detected Python {version_output}, using pipx...")
+            cmd = (
+                "pipx ensurepath && "
+                "pipx install mitmproxy && "
+                "pipx inject mitmproxy cachetools scapy"
+            )
+        else:
+            log.info(f"🐍 Detected Python {version_output}, using pip...")
+            cmd = "python3 -m pip install mitmproxy cachetools scapy"
+
+        # Execute pip or pipx command
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        if stdout.channel.recv_exit_status() != 0:
+            raise Exception(stderr.read().decode())
 
         log.info("✅ Remote dependencies installed.")
     except Exception as e:
         log.error(f"❌ Failed to install dependencies: {e}")
+
 
 def setup_ssh_authorized_key(ssh, config):
     """
