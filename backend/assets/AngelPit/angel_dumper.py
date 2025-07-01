@@ -11,7 +11,7 @@ import sys
 MTU = 1400
 SEQ_START_CLIENT = 1000
 SEQ_START_SERVER = 100000
-DUMP_INTERVAL_SECONDS = 5
+DUMP_INTERVAL_SECONDS = 20
 
 # ==== Logging Setup ====
 logging.basicConfig(
