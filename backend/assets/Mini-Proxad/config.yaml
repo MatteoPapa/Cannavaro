@@ -1,34 +1,181 @@
-# Service configuration
-service_name: {{SERVICE_NAME}}
+import os
+import time
+import threading
+from datetime import datetime
+from scapy.all import wrpcap, Ether, IP, TCP, Raw, PacketList
 
-# The port and ip that the proxy will expose publicly
-# aliases: client_ip, client_port
-from_ip: 0.0.0.0
-from_port: {{FROM_PORT}}
+from mitmproxy import ctx, http
+import logging
 
-# The port and ip for the internal service
-# aliases: server_ip, server_port
-to_ip: {{TO_IP}}
-to_port: {{TO_PORT}}
+# Logging setup
+LOG_FILE = "./pcap_dumper.log"
+logging.basicConfig(
+    filename=LOG_FILE,
+    filemode="a",
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    level=logging.INFO
+)
+logger = logging.getLogger("PCAPDumper")
 
-# The path to the python filter
-# This will be automatically reloaded
-script_path: /root/{{SERVICE_NAME}}/proxy_folder_{{SERVICE_NAME}}/proxy_filters.py
+# Constants
+MTU = 1400
+SEQ_START_CLIENT = 1000
+SEQ_START_SERVER = 100000
+DUMP_INTERVAL_SECONDS = 5
 
-# TLS configuration
-# If the tls_ca_file is present the proxy will authenticate the service
-tls_enabled: {{TLS_ENABLED}}
-tls_cert_file: {{CERT_PATH}}
-tls_key_file: {{KEY_PATH}}
-#tls_ca_file: ./test/keys/ca-cert.pem
 
-# Pcap dumper configuration
-# The dump_format acceps the following format values
-#   - {service} will be replaced with the service name
-#   - {timestamp} will be replaced with the time of the dump
-#   - {client_ip} {from_ip} will be replaced with the client_ip
-#   - {server_ip} {to_ip} will be replaced with the server_ip
-dump_enabled: {{DUMP_ENABLED}}
-dump_path: {{DUMP_PATH}}
-dump_format: "{service}_{server_port}_{timestamp}.pcap"
-dump_interval: 30s
+class PCAPDumper:
+    def __init__(self):
+        self.client_streams = {}
+        self.lock = threading.Lock()
+        self._is_running = True
+
+    def load(self, loader):
+        self.pcap_path = ctx.options.get("pcap_path", "./pcap_dumps")
+        self.service_name = ctx.options.get("service_name", "service")
+        print(f"📦 PCAP Dumper initialized (saving to: {self.pcap_path}, service: {self.service_name})")
+
+        os.makedirs(self.pcap_path, exist_ok=True)
+
+        thread = threading.Thread(target=self._periodic_dumper, daemon=True)
+        thread.start()
+
+    def done(self):
+        self._is_running = False
+
+    def _periodic_dumper(self):
+        while self._is_running:
+            time.sleep(DUMP_INTERVAL_SECONDS)
+            try:
+                self._dump_all_flows()
+            except Exception as e:
+                logger.exception("Error in periodic dumper")
+
+    def client_connected(self, client):
+        with self.lock:
+            self.client_streams[client.id] = {
+                "client_addr": client.address,
+                "flows": [],
+                "server_addr": None
+            }
+
+    def response(self, flow: http.HTTPFlow):
+        with self.lock:
+            stream = self.client_streams.get(flow.client_conn.id)
+            if stream:
+                stream["flows"].append(flow)
+                if stream["server_addr"] is None:
+                    stream["server_addr"] = flow.server_conn.address
+
+    def client_disconnected(self, client):
+        # We no longer dump on disconnect
+        pass
+
+    def _dump_all_flows(self):
+        with self.lock:
+            all_flows = []
+            server_port = None
+
+            for stream in self.client_streams.values():
+                if stream["flows"] and stream["server_addr"]:
+                    all_flows.extend(stream["flows"])
+                    server_port = self._normalize_addr(stream["server_addr"])[1]
+
+            if not all_flows or server_port is None:
+                return
+
+            # Use first flow's addresses for building packets
+            c_addr = all_flows[0].client_conn.address
+            s_addr = all_flows[0].server_conn.address
+
+            packets = self._build_tcp_stream(c_addr, s_addr, all_flows)
+
+            timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+            filename = f"{self.service_name}_{server_port}_{timestamp}.pcap"
+            full_path = os.path.join(self.pcap_path, filename)
+
+            try:
+                wrpcap(full_path, packets)
+                logger.info(f"📤 Dumped unified PCAP: {full_path} ({len(packets)} packets)")
+            except Exception as e:
+                logger.exception("Failed to write unified PCAP")
+
+            # Clear all stored flows
+            for stream in self.client_streams.values():
+                stream["flows"].clear()
+
+    def _build_tcp_stream(self, client_addr, server_addr, flows):
+        c_ip, c_port = self._normalize_addr(client_addr)
+        s_ip, s_port = self._normalize_addr(server_addr)
+
+        packets = PacketList()
+        seq_c, seq_s = SEQ_START_CLIENT, SEQ_START_SERVER
+        ack_c, ack_s = seq_s + 1, seq_c + 1
+        t = time.time()
+        delay = 0.001
+
+        # Handshake
+        packets.append(self._pkt(c_ip, s_ip, c_port, s_port, seq_c, 0, "S", t))
+        packets.append(self._pkt(s_ip, c_ip, s_port, c_port, seq_s, seq_c + 1, "SA", t + delay))
+        packets.append(self._pkt(c_ip, s_ip, c_port, s_port, seq_c + 1, seq_s + 1, "A", t + 2 * delay))
+
+        seq_c += 1
+        seq_s += 1
+        t += 3 * delay
+
+        # Payloads
+        for flow in flows:
+            req = self._build_http_request(flow.request)
+            res = self._build_http_response(flow.response) if flow.response else b""
+
+            for data, src, dst, sport, dport, seq, ack in [
+                (req, c_ip, s_ip, c_port, s_port, seq_c, ack_c),
+                (res, s_ip, c_ip, s_port, c_port, seq_s, seq_c),
+            ]:
+                offset = 0
+                while offset < len(data):
+                    chunk = data[offset:offset + MTU]
+                    packets.append(self._pkt(src, dst, sport, dport, seq, ack, "PA", t, chunk))
+                    seq += len(chunk)
+                    offset += len(chunk)
+                    t += delay
+                if src == c_ip:
+                    seq_c = seq
+                else:
+                    seq_s = seq
+
+        # FIN
+        packets.append(self._pkt(c_ip, s_ip, c_port, s_port, seq_c, seq_s, "FA", t))
+        t += delay
+        packets.append(self._pkt(s_ip, c_ip, s_port, c_port, seq_s, seq_c + 1, "A", t))
+
+        return packets
+
+    def _pkt(self, src_ip, dst_ip, sport, dport, seq, ack, flags, timestamp, payload=b""):
+        ether = Ether(src="aa:aa:aa:aa:aa:aa", dst="bb:bb:bb:bb:bb:bb")
+        ip = IP(src=src_ip, dst=dst_ip)
+        tcp = TCP(sport=sport, dport=dport, flags=flags, seq=seq, ack=ack)
+        pkt = ether / ip / tcp / (Raw(load=payload) if payload else b"")
+        pkt.time = timestamp
+        return pkt
+
+    def _normalize_addr(self, addr):
+        """Handle IPv4 and IPv6 tuples"""
+        if isinstance(addr, tuple) and len(addr) >= 2:
+            return addr[0], addr[1]
+        raise ValueError("Invalid address format")
+
+    def _build_http_request(self, request):
+        lines = [f"{request.method} {request.path} HTTP/{request.http_version}"]
+        for k, v in request.headers.items(multi=True):
+            lines.append(f"{k}: {v}")
+        return "\r\n".join(lines).encode() + b"\r\n\r\n" + (request.raw_content or b"")
+
+    def _build_http_response(self, response):
+        lines = [f"HTTP/{response.http_version} {response.status_code} {response.reason}"]
+        for k, v in response.headers.items(multi=True):
+            lines.append(f"{k}: {v}")
+        return "\r\n".join(lines).encode() + b"\r\n\r\n" + (response.raw_content or b"")
+
+
+addons = [PCAPDumper()]
