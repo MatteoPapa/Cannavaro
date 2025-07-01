@@ -21,4 +21,6 @@ terraform.tfstate
 terraform.tfstate.backup
 .terraform/
 reset_hetzner.sh
+hetzner_test/
 *.bin
+backend/config.yaml

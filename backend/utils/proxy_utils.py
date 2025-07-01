@@ -175,6 +175,7 @@ def install_angel_pit_proxy(ssh, config, proxy_config, service_path, parent, sub
         '--certs "*=combined.pem"' if proxy_config.get("tls_enabled") else "",
         "--quiet",
         "--ssl-insecure",
+        "--set block_global=false",
         "-s angel_pit_proxy.py"
     ]
 
