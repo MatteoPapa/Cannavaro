@@ -5,6 +5,7 @@ import ast
 import re
 import tempfile
 import os
+import socket
 from utils.ssh_utils import run_remote_command
 from utils.services_utils import rolling_restart_docker_service
 from utils.logging_utils import log
@@ -41,6 +42,24 @@ def is_proxy_installed(ssh, service_name):
     output = stdout.read().decode().strip()
     log.info(f"Proxy check for {service_name}: {output}")
     return output == "exists"
+
+def create_start_script(sftp, script_path, screen_name, log_file, command_body):
+    """
+    Creates a start_proxy.sh script to launch the proxy inside a screen session.
+    """
+    script_content = (
+        "#!/bin/bash\n\n"
+        f"screen -L -Logfile {log_file} "
+        f"-S {screen_name} -dm bash -lic '{command_body}'\n"
+    )
+
+    with tempfile.NamedTemporaryFile("w", delete=False) as tmp_file:
+        tmp_file.write(script_content)
+        tmp_local_path = tmp_file.name
+
+    sftp.put(tmp_local_path, script_path)
+    sftp.chmod(script_path, 0o755)
+    os.remove(tmp_local_path)
 
 # ----- MAIN FUNCTIONS -----
 def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
@@ -184,32 +203,31 @@ def install_angel_pit_proxy(ssh, config, proxy_config, service_path, parent, sub
         mitm_command.append(f"--set pcap_path={proxy_config.get('pcap_path', 'pcaps')}")
         mitm_command.append(f"--set service_name={parent}")
 
-    launch_script = "#!/bin/bash\n\n" + " \\\n  ".join(filter(None, mitm_command)) + "\n"
-    script_local_path = tempfile.NamedTemporaryFile("w", delete=False)
-    script_local_path.write(launch_script)
-    script_local_path.close()
-
-    launch_remote_path = posixpath.join(remote_proxy_dir, "launch_proxy.sh")
-    sftp.put(script_local_path.name, launch_remote_path)
+    launch_remote_path = posixpath.join(remote_proxy_dir, "angelpit_command.sh")
+    mitm_cmd_str = " \\\n  ".join(filter(None, mitm_command))
+    with tempfile.NamedTemporaryFile("w", delete=False) as mitm_file:
+        mitm_file.write("#!/bin/bash\n\n" + mitm_cmd_str + "\n")
+        mitm_file_path = mitm_file.name
+    sftp.put(mitm_file_path, launch_remote_path)
     sftp.chmod(launch_remote_path, 0o755)
-    os.remove(script_local_path.name)
-    sftp.close()
+    os.remove(mitm_file_path)
+
+    # Start script generation
+    start_script_path = posixpath.join(remote_proxy_dir, "start_proxy.sh")
+    screen_name = f"proxy_{parent}"
+    log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
+    command_body = f"cd {remote_proxy_dir} && bash {os.path.basename(launch_remote_path)}"
+    create_start_script(sftp, start_script_path, screen_name, log_file, command_body)
 
     # 🔁 Restart docker subservice
     rolling_restart_docker_service(ssh, service_path, [subservice])
 
-    # Launch proxy in screen
-    screen_name = f"proxy_{parent}"
-    log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
-    start_cmd = (
-        f"screen -L -Logfile {log_file} "
-        f"-S {screen_name} -dm bash -lic 'cd {remote_proxy_dir} && bash {os.path.basename(launch_remote_path)}'"
-    )
-    run_remote_command(ssh, start_cmd, raise_on_error=True)
+    # Launch start_proxy.sh
+    run_remote_command(ssh, f"bash {start_script_path}", raise_on_error=True)
+
 
     return {"success": True}
 
-import socket
 def install_mini_proxad(ssh, config, proxy_config, service_path, parent, subservice, adjusted_port, original_port):
     local_proxy_dir = os.path.join(os.path.dirname(__file__), "../assets/Mini-Proxad")
     if not os.path.isdir(local_proxy_dir):
@@ -260,11 +278,16 @@ def install_mini_proxad(ssh, config, proxy_config, service_path, parent, subserv
     # ⏯️ Launch Mini-Proxad via screen
     screen_name = f"proxy_{parent}"
     log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
-    launch_cmd = (
-        f"screen -L -Logfile {log_file} "
-        f"-S {screen_name} -dm bash -lic 'chmod +x {remote_proxy_dir}/mini-proxad.bin && {remote_proxy_dir}/mini-proxad.bin --config {remote_proxy_dir}/config.yaml'"
+    start_script_path = posixpath.join(remote_proxy_dir, "start_proxy.sh")
+    command_body = (
+        f"chmod +x {remote_proxy_dir}/mini-proxad.bin && "
+        f"{remote_proxy_dir}/mini-proxad.bin --config {remote_proxy_dir}/config.yaml"
     )
-    run_remote_command(ssh, launch_cmd, raise_on_error=True)
+    create_start_script(sftp, start_script_path, screen_name, log_file, command_body)
+
+    # Launch the start script
+    run_remote_command(ssh, f"bash {start_script_path}", raise_on_error=True)
+
 
     sftp.close()
     return {"success": True}
