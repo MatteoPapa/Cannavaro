@@ -1,16 +1,11 @@
 from importlib import import_module
 import socket, select, threading
-import os, shutil, resource, sys, re, json
+import os, resource, sys, re
 import logging
-import random, string
-import requests, datetime, time
-import base64
 import importlib
 import ssl
 from collections import UserDict
-from scapy.all import PcapNgWriter, PcapWriter, Ether, IP, IPv6, TCP, Raw
 
-#PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE
 ##############################   SETTINGS   ##############################
 
 
@@ -32,21 +27,20 @@ TO_ADDR = "{{TARGET_IP}}" # type: ignore
 FROM_PORT = {{FROM_PORT}} # type: ignore
 TO_PORT = {{TO_PORT}} # type: ignore
 
-# SSL Configuration (Pay attention to the paths)
-SSL = {{SSL_ENABLED}} # type: ignore
+# DONT YOU DARE TO TOUCH THIS
+SSL = False # type: ignore
 SSL_KEYFILE = "./certs/server-key.pem"
 SSL_CERTFILE = "./certs/server-cert.pem"
 SSL_CA_CERT = "./certs/ca-cert.pem"
 ALLOWED_PROTOCOLS = ['http/1.1'] # type: ignore
-
-DUMP = SSL
+DUMP = False
 DUMP_MODE = 'pcap'
 PCAPS_DIR = '/root/pcaps/service/'
 if DUMP and not os.path.exists(PCAPS_DIR):
 	os.makedirs(PCAPS_DIR)
-	
 DUMP_FORMAT = f"{PCAPS_DIR}service_{TO_PORT}_%Y-%m-%d_%H.%M.%S.pcap"
 DUMP_ROUND = 60
+###############################
 
 ULIMIT = 16384
 
@@ -57,17 +51,8 @@ FLAG_REGEX = rb'[A-Z0-9]{31}='
 FLAG_REPLACEMENT = 'GRAZIEDARIO'
 BLOCK_ALL_EVIL_REQUESTS = False #Not only flag replacements, but also other requests that match the regexes
 
-REGEX_MASKS = [
+ALL_REGEXES = [
 ]
-REGEX_MASKS_2 = [
-]
-
-#PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE
-##############################   SETUP   ##############################
-
-
-if DUMP_MODE == 'auto':
-	DUMP_MODE = DUMP_FORMAT.split('.')[-1]
 
 
 ##############################   COLORS   ##############################
@@ -385,7 +370,7 @@ def server_info_filter(logger:logging.Logger, data:bytes, server_history:History
 
 
 def close_filter(logger:logging.Logger, data:bytes, server_history:History, client_history:History, id:str) -> bytes:
-	for exclusion in REGEX_MASKS:
+	for exclusion in ALL_REGEXES:
 		if re.search(exclusion, data):
 			return False
 	return data
@@ -397,7 +382,7 @@ def replace_filter(logger:logging.Logger, data:bytes, server_history:History, cl
 
 
 def regex_filter(logger:logging.Logger, data:bytes, server_history:History, client_history:History, id:str) -> bytes:
-	for exclusion in REGEX_MASKS:
+	for exclusion in ALL_REGEXES:
 		if re.search(exclusion, client_history.data):
 			data = replace_flag(logger, data, id)
 			break
@@ -418,91 +403,6 @@ SERVER_FILTERS = [
 CLIENT_FILTERS = [
 ]
 
-#PLACEHOLDER_FOR_CANNAVARO_DONT_TOUCH_THIS_LINE
-##############################   DUMPER   ##############################
-
-
-class Dumper(threading.Thread):
-	def __init__(self, file_format, logger):
-		super().__init__()
-		self.file_format = file_format
-		self.logger = logger
-		self.lock = threading.Lock()
-		self.lock.acquire()
-
-	def open(self, file):
-		self.file = file
-		if DUMP_MODE == 'pcapng':
-			self.pcap_writer = PcapNgWriter(self.file)
-		else:
-			self.pcap_writer = PcapWriter(self.file, append=True)
-
-	def write(self, pkt):
-		self.lock.acquire()
-		self.pcap_writer.write(pkt)
-		self.lock.release()
-
-	def close(self):
-		self.pcap_writer.close()
-
-	def run(self):
-		while True:
-			file = datetime.datetime.now().strftime(self.file_format)
-			tmp_file = f"/tmp/temp_{TO_PORT}.pcap"
-			self.open(tmp_file)
-			self.lock.release()
-			time.sleep(DUMP_ROUND)
-			self.lock.acquire()
-			self.close()
-			shutil.move(tmp_file, file)
-			self.logger.info(f"Dumped to {file}")
-
-
-class TCPDump:
-	default_ack = 1_000_000
-	default_seq = 1_000
-
-	def __init__(self, dumper, src, dst, sport, dport):
-		self.dumper = dumper
-		self.src = src
-		self.dst = dst
-		self.sport = sport
-		self.dport = dport
-		self.seq = self.default_seq
-		self.ack = 0
-		self.client = False
-		self.do_handshake()
-
-	def write_packet(self, seq, ack, client=True, data=None, mode='A'):
-		if client:
-			s, d, sp, dp = self.src, self.dst, self.sport, self.dport
-		else:
-			s, d, sp, dp = self.dst, self.src, self.dport, self.sport
-		if IPV6:
-			pkt = Ether(src="11:11:11:11:11:11", dst="22:22:22:22:22:22") / IPv6(src=s, dst=d) / TCP(sport=sp, dport=dp, flags=mode, seq=seq, ack=ack)
-		else:
-			pkt = Ether(src="11:11:11:11:11:11", dst="22:22:22:22:22:22") / IP(src=s, dst=d) / TCP(sport=sp, dport=dp, flags=mode, seq=seq, ack=ack)
-		if data:
-			pkt /= Raw(load=data)
-		self.dumper.write(pkt)
-
-	def do_handshake(self):
-		self.write_packet(self.seq, self.ack, mode='S')
-		self.seq, self.ack = self.default_ack, self.seq + 1
-		self.write_packet(self.seq, self.ack, client=False, mode='SA')
-		self.seq, self.ack = self.ack, self.seq + 1
-		self.write_packet(self.seq, self.ack)
-
-	def close(self):
-		self.write_packet(self.seq, self.ack, client=(not self.client), mode='FA')
-
-	def add_packet(self, data, client=True):
-		self.write_packet(self.seq, self.ack, client=client, data=data, mode='PA')
-		self.seq, self.ack = self.ack, self.seq + len(data)
-		self.client = client
-
-
-DUMPER = Dumper(DUMP_FORMAT, logger)
 
 
 ##############################   CLIENT2SERVER   ##############################
@@ -533,12 +433,7 @@ class Client2Server(threading.Thread):
 				)
 			self.server.connect((to_host, to_port))
 
-			if DUMP:
-				src, sport = self.client.getpeername()[:2]
-				dst, dport = self.client.getsockname()[0], self.server.getpeername()[1]
-				self.dump = TCPDump(DUMPER, src, dst, sport, dport)
-			else:
-				self.dump = None
+			self.dump = None
 
 			self.client.setblocking(False)
 			self.server.setblocking(False)

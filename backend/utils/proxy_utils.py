@@ -136,7 +136,17 @@ def install_proxy_for_service(ssh, config, parent, subservice, proxy_config):
             )
             if not result.get("success"):
                 return result
-
+        elif proxy_config.get("proxy_type") == "DemonHill":
+            log.info("Installing DemonHill proxy")
+            result = install_demon_hill_proxy(
+                ssh, config, proxy_config, service_path,
+                parent, subservice, adjusted_port, original_port
+            )
+            if not result.get("success"):
+                return result
+        else:
+            return {"success": False, "error": f"Unsupported proxy type: {proxy_config.get('proxy_type')}"}
+            
         # Final commit
         run_remote_command(ssh, f"""
             cd {service_path} && \
@@ -297,6 +307,52 @@ def install_mini_proxad(ssh, config, proxy_config, service_path, parent, subserv
     command_body = (
         f"chmod +x {remote_proxy_dir}/mini-proxad.bin && "
         f"{remote_proxy_dir}/mini-proxad.bin --config {remote_proxy_dir}/config.yaml"
+    )
+    create_start_script(sftp, start_script_path, screen_name, log_file, command_body)
+
+    # Launch the start script
+    run_remote_command(ssh, f"bash {start_script_path}", raise_on_error=True)
+
+
+    sftp.close()
+    return {"success": True}
+
+def install_demon_hill_proxy(ssh, config, proxy_config, service_path, parent, subservice, adjusted_port, original_port):
+    local_proxy_dir = os.path.join(os.path.dirname(__file__), "../assets/DemonHill")
+    if not os.path.isdir(local_proxy_dir):
+        return {"success": False, "error": "Proxy template folder Mini-Proxad not found."}
+
+    remote_proxy_dir = f"{service_path}/proxy_folder_{parent}"
+    run_remote_command(ssh, f"mkdir -p {remote_proxy_dir}")
+    sftp = ssh.open_sftp()
+
+    if config["remote_host"] == "host.docker.internal":
+        address = socket.gethostbyname("host.docker.internal")
+    else:
+        address = "127.0.0.1"
+
+    replacements = {
+        "FROM_PORT": original_port,
+        "TO_PORT": adjusted_port,
+        "TARGET_IP": address
+    }
+
+    for filename in os.listdir(local_proxy_dir):
+        local_path = os.path.join(local_proxy_dir, filename)
+        remote_path = posixpath.join(remote_proxy_dir, filename)
+        rendered = render_template_file(local_path, replacements)
+        with sftp.open(remote_path, 'w') as f:
+            f.write(rendered)
+
+    # 🔁 Restart subservice container to ensure the proxy can bind to the target port
+    rolling_restart_docker_service(ssh, service_path, [subservice])
+
+    # ⏯️ Launch DemonHill via screen
+    screen_name = f"proxy_{parent}"
+    log_file = f"{remote_proxy_dir}/log_{screen_name}.txt"
+    start_script_path = posixpath.join(remote_proxy_dir, "start_proxy.sh")
+    command_body = (
+        f"python3 {remote_proxy_dir}/proxy_filters.py"
     )
     create_start_script(sftp, start_script_path, screen_name, log_file, command_body)
 
