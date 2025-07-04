@@ -252,9 +252,24 @@ def install_mini_proxad(ssh, config, proxy_config, service_path, parent, subserv
         "TLS_ENABLED": str(proxy_config.get("tls_enabled", False)).lower(),
         "DUMP_ENABLED": str(proxy_config.get("dump_pcaps", False)).lower(),
         "DUMP_PATH": proxy_config.get("pcap_path", "pcaps"),
+        "HTTP_ENABLED": str(proxy_config.get("protocol", False)).lower()== "http",
     }
 
     for filename in os.listdir(local_proxy_dir):
+        # Handle special case for proxy_filters.py
+        if filename == "proxy_filters.py" or filename == "proxy_filters_http.py":
+            if replacements["HTTP_ENABLED"] and filename == "proxy_filters_http.py":
+                # Upload as proxy_filters.py
+                local_path = os.path.join(local_proxy_dir, filename)
+                remote_path = posixpath.join(remote_proxy_dir, "proxy_filters.py")
+                sftp.put(local_path, remote_path)
+            elif not replacements["HTTP_ENABLED"] and filename == "proxy_filters.py":
+                # Upload as-is
+                local_path = os.path.join(local_proxy_dir, filename)
+                remote_path = posixpath.join(remote_proxy_dir, filename)
+                sftp.put(local_path, remote_path)
+            continue
+
         local_path = os.path.join(local_proxy_dir, filename)
         remote_path = posixpath.join(remote_proxy_dir, filename)
 

@@ -94,6 +94,9 @@ class ProxyAddon:
             logger.debug(f"[📦] Session ID: {ctx.session_id}")
             if proxy_filters.ALL_SESSIONS.get(ctx.session_id):
                 proxy_filters.replace_flag(ctx.flow)
+                # Clean up to avoid leaks
+                del ctx.raw_request
+                del ctx.raw_response
                 return
 
         try:
@@ -112,6 +115,9 @@ class ProxyAddon:
                 f(ctx)
         except Exception as e:
             logger.error(f"[❌] TCP Filter error: {e}")
+        finally:
+            del ctx.raw_request
+            del ctx.raw_response
 
 ########## ADDON REGISTRATION ##########
 

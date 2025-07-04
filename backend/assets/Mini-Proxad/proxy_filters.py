@@ -4,6 +4,7 @@ import types
 import typing
 import sys
 import traceback
+from proxad import RawFlow
 
 
 # Use a fake python module to hold state between file reloads
@@ -23,18 +24,24 @@ FilterOutput = bytes | None | types.EllipsisType
 # 2 parameter -> current chunk (bytes)
 # 3 parameter -> client history (bytes)
 # 4 parameter -> server history (bytes)
-FilterType = typing.Callable[[uuid.UUID, bytes, bytes, bytes], FilterOutput]
+FilterType = typing.Callable[[RawFlow, bytes], FilterOutput]
 
 
 # ------------------------------------------------------------------------------------------------ #
 
 
 # HTTP session tracking
-HTTP_SESSION_TRACK = False
-HTTP_SESSION_COOKIE = "session"
-HTTP_SESSION_TTL = 30  # seconds
-HTTP_SESSION_LIMIT = 4000
-
+# HTTP_SESSION_TRACK = False
+# HTTP_SESSION_COOKIE = b"session"
+# HTTP_SESSION_TTL = 30  # seconds
+# HTTP_SESSION_LIMIT = 4000
+#
+# HTTP_SESSION_GET_REGEX = re.compile(
+#    rb"Cookie:\s*" + HTTP_SESSION_COOKIE + rb"=([^;\r\n]+)"
+# )
+# HTTP_SESSION_SET_REGEX = re.compile(
+#    rb"Set-Cookie:\s*" + HTTP_SESSION_COOKIE + rb"=([^;]+)"
+# )
 
 # Regexes
 FLAG_REGEX = re.compile(rb"[A-Z0-9]{31}=")
@@ -67,7 +74,7 @@ COMPILED_BLACKLIST = [
 
 
 # This filter always replaces the flag, combine it
-def replace_flag(id, chunk, client_history, server_history):
+def replace_flag(flow, chunk):
     return re.sub(FLAG_REGEX, FLAG_REPLACEMENT, chunk)
 
 
@@ -85,32 +92,32 @@ def send_error(*_rest):
 
 
 # Check if any of the patterns in ALL_REGEXES match the client_history
-def check_is_evil(id, chunk, client_history, server_history):
-    return any(re.search(pattern, client_history) for pattern in COMPILED_REGEXES)
+def check_is_evil(flow, chunk):
+    return any(re.search(pattern, flow.client_history) for pattern in COMPILED_REGEXES)
 
 
 # If the connection is recognized as evil, call DEFAULT_FILTER
-def default_on_evil(id, chunk, client_history, server_history):
-    if check_is_evil(id, chunk, client_history, server_history):
-        return DEFAULT_FILTER(id, chunk, client_history, server_history)
+def default_on_evil(flow, chunk):
+    if check_is_evil(flow, chunk):
+        return DEFAULT_FILTER(flow, chunk)
 
 
-def whitelist_useragent(id, chunk, client_history, server_history):
+def whitelist_useragent(flow, chunk):
     if not any(re.search(ua, chunk) for ua in COMPILED_WHITELIST):
         print("Blocked or missing User-Agent")
-        return DEFAULT_FILTER(id, chunk, client_history, server_history)
+        return DEFAULT_FILTER(flow, chunk)
 
 
-def blacklist_useragent(id, chunk, client_history, server_history):
+def blacklist_useragent(flow, chunk):
     if any(re.search(ua, chunk) for ua in COMPILED_BLACKLIST):
         print("Blacklisted User-Agent")
-        return DEFAULT_FILTER(id, chunk, client_history, server_history)
+        return DEFAULT_FILTER(flow, chunk)
 
 
 # Custom filters start
 
 
-def myfilter(id, chunk, client_history, server_history):
+def myfilter(flow, chunk):
     return None
 
 
@@ -135,24 +142,22 @@ SKIP_ERROR = True  # skip filter if exception was raised
 PRINT_ERROR = True  # print traceback of exceptions
 
 
-if HTTP_SESSION_TRACK and not hasattr(state, "HTTP_SESSIONS"):
-    state.HTTP_SESSIONS = __import__("cachetools").TTLCache(
-        maxsize=HTTP_SESSION_LIMIT, ttl=HTTP_SESSION_TTL
-    )
+# if HTTP_SESSION_TRACK and not hasattr(state, "HTTP_SESSIONS"):
+#    state.HTTP_SESSIONS = __import__("cachetools").TTLCache(
+#        maxsize=HTTP_SESSION_LIMIT, ttl=HTTP_SESSION_TTL
+#    )
 
 
 # Generic filter runner
 def run_filters(
-    id: uuid.UUID,
+    flow: RawFlow,
     chunk: bytes,
-    client_history: bytes,
-    server_history: bytes,
     filters: list[FilterType],
 ) -> FilterOutput:
     current = chunk
     for f in filters:
         try:
-            outcome = f(id, current, client_history, server_history)
+            outcome = f(flow, current)
             if outcome is ...:
                 return ...
             if outcome is not None:
@@ -166,18 +171,25 @@ def run_filters(
 
 
 # Filter for the incoming messages
-def client_filter_history(
-    id: uuid.UUID, chunk: bytes, client_history: bytes, server_history: bytes
-) -> FilterOutput:
-    if HTTP_SESSION_TRACK:
-        pass
-    return run_filters(id, chunk, client_history, server_history, CLIENT_FILTERS)
+def client_raw_filter(flow: RawFlow, chunk: bytes) -> FilterOutput:
+    # if HTTP_SESSION_TRACK:
+    #    match = HTTP_SESSION_GET_REGEX.search(chunk)
+    #    if match:
+    #        print("Found session_id:", match.group(1))
+
+    return run_filters(flow, chunk, CLIENT_FILTERS)
 
 
 # Filter for the outgoing messages
-def server_filter_history(
-    id: uuid.UUID, chunk: bytes, client_history: bytes, server_history: bytes
-) -> FilterOutput:
-    if HTTP_SESSION_TRACK:
-        pass
-    return run_filters(id, chunk, client_history, server_history, SERVER_FILTERS)
+def server_raw_filter(flow: RawFlow, chunk: bytes) -> FilterOutput:
+    # if HTTP_SESSION_TRACK:
+    #    match = HTTP_SESSION_SET_REGEX.search(chunk)
+    #    if match:
+    #        print("First session_id:", match.group(1))
+
+    return run_filters(flow, chunk, SERVER_FILTERS)
+
+
+# Gets executed everytime a flow is opened
+# def raw_open(flow):
+#    print(flow.server_history)

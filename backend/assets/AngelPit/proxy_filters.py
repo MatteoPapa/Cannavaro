@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger("mitm_logger")
 
 # HTTP session tracking
-TRACK_HTTP_SESSION = True
+TRACK_HTTP_SESSION = False
 SESSION_COOKIE_NAME = "session"
 SESSION_TTL = 30  # seconds
 SESSION_LIMIT = 4000
@@ -27,7 +27,9 @@ ERROR_RESPONSE = mitmproxy.http.Response.make(500, BLOCKING_ERROR, {"Content-Typ
 INFINITE_LOADING_RESPONSE = mitmproxy.http.Response.make(302, "", {"Location": "https://stream.wikimedia.org/v2/stream/recentchange"})
 
 # Regexes
-ALL_REGEXES = [rb"evilbanana"]
+ALL_REGEXES = [
+    rb"eviluser"
+]
 ALL_REGEXES = list(re.compile(pattern) for pattern in ALL_REGEXES)
 
 ############ CONFIG #################
@@ -36,7 +38,7 @@ ALLOWED_HTTP_METHODS = ["GET", "POST", "PATCH", "DELETE"]
 MAX_PARAMETER_AMOUNT = 20
 MAX_PARAMETER_LENGTH = 100
 USERAGENTS_WHITELIST = [
-    r"CHECKER",
+    r"checker",
 ]
 USERAGENTS_WHITELIST = [re.compile(pattern) for pattern in USERAGENTS_WHITELIST]
 USERAGENTS_BLACKLIST = [
@@ -194,14 +196,15 @@ FILTERS = [
 
 def block_flow(flow):
     if flow.type == "http":
-        flow.response = INFINITE_LOADING_RESPONSE
+        flow.kill()
+        # flow.response = INFINITE_LOADING_RESPONSE
         # flow.response = ERROR_RESPONSE
-        # flow.kill()
         return True
     elif flow.type == "tcp":
         if flow.killable:
             flow.kill()
             return True
+    return False
 
 
 def replace_flag(flow):

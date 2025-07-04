@@ -57,7 +57,8 @@ def ensure_remote_dependencies(ssh):
             cmd = (
                 "pipx ensurepath && "
                 "pipx install mitmproxy && "
-                "pipx inject mitmproxy cachetools scapy"
+                "pipx inject mitmproxy cachetools scapy && "
+                "python3 -m pip install cachetools --break-system-packages"
             )
         else:
             log.info(f"🐍 Detected Python {version_output}, using pip...")
