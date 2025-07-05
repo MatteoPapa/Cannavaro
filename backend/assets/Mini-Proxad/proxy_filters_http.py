@@ -24,16 +24,15 @@ class ColorFormatter(logging.Formatter):
 
 
 logger = logging.getLogger("mini-proxad")
-# logger.setLevel(logging.INFO)
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-handler.setFormatter(ColorFormatter("[%(levelname)s] %(message)s"))
-if not logger.hasHandlers():
+logger.setLevel(logging.INFO)  # Change to logging.DEBUG to debug
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(ColorFormatter("[%(levelname)s] %(message)s"))
     logger.addHandler(handler)
 
 
 # HTTP session tracking
-TRACK_HTTP_SESSION = False
+TRACK_HTTP_SESSION = True
 SESSION_COOKIE_NAME = "session"
 SESSION_TTL = 30  # seconds
 SESSION_LIMIT = 4000
@@ -60,7 +59,7 @@ INFINITE_LOADING_RESPONSE = HttpResp(
 )
 
 # Regexes
-ALL_REGEXES = [rb"eviluser"]
+ALL_REGEXES = [rb"evilbanana"]
 ALL_REGEXES = list(re.compile(pattern) for pattern in ALL_REGEXES)
 
 ############ CONFIG #################
@@ -69,7 +68,7 @@ ALLOWED_HTTP_METHODS = ["GET", "POST", "PATCH", "DELETE"]
 MAX_PARAMETER_AMOUNT = 10
 MAX_PARAMETER_LENGTH = 10
 USERAGENTS_WHITELIST = [
-    r"checker",
+    r"CHECKER",
 ]
 USERAGENTS_WHITELIST = [re.compile(pattern) for pattern in USERAGENTS_WHITELIST]
 USERAGENTS_BLACKLIST = [
@@ -86,10 +85,10 @@ ACCEPT_ENCODING_WHITELIST = [
 
 
 def method_filter(flow: HttpFlow, req: HttpReq, resp: HttpResp):
-    method = req.method
+    method = req.method.upper()
 
     if method not in ALLOWED_HTTP_METHODS:
-        logger.debug(f"Invalid method")
+        logger.debug("Invalid HTTP method")
         return replace_flag(resp)
 
 
@@ -123,23 +122,27 @@ def nonprintable_params_filter(flow: HttpFlow, req: HttpReq, resp: HttpResp):
 def useragent_whitelist_filter(flow: HttpFlow, req: HttpReq, resp: HttpResp):
     user_agent = req.headers.get("user-agent", "")
 
-    if not any(re.search(pattern, user_agent) for pattern in USERAGENTS_WHITELIST):
-        logger.debug("Invalid User-Agent detected")
-        return replace_flag(resp)
+    for pattern in USERAGENTS_WHITELIST:
+        if re.search(pattern, user_agent):
+            return
+
+    logger.debug("Invalid User Agent detected")
+    return replace_flag(resp)
 
 
 def useragent_blacklist_filter(flow: HttpFlow, req: HttpReq, resp: HttpResp):
     user_agent = req.headers.get("user-agent", "")
 
-    if any(re.search(pattern, user_agent) for pattern in USERAGENTS_BLACKLIST):
-        logger.debug("Invalid User-Agent detected")
-        return replace_flag(resp)
+    for pattern in USERAGENTS_BLACKLIST:
+        if re.search(pattern, user_agent):
+            logger.debug("Blacklisted User Agent detected")
+            return replace_flag(resp)
 
 
 def accept_encoding_filter(flow: HttpFlow, req: HttpReq, resp: HttpResp):
     accept_encoding = req.headers.get("accept-encoding", "")
     if accept_encoding not in ACCEPT_ENCODING_WHITELIST:
-        logger.debug(f"Invalid Accept-Encoding header")
+        logger.debug("Invalid Accept-Encoding header")
         return replace_flag(resp)
 
 
@@ -154,25 +157,26 @@ def multiple_flags_filter(flow: HttpFlow, req: HttpReq, resp: HttpResp):
 
 
 def regex_filter(flow: HttpFlow, req: HttpReq, resp: HttpResp):
-    if any(re.search(pattern, req.raw) for pattern in ALL_REGEXES):
-        if flow.session_id:
-            logger.info(f"[🔍] Regex match found in session {flow.session_id}")
-            ALL_SESSIONS[flow.session_id] = True
-        return replace_flag(resp)
+    for pattern in ALL_REGEXES:
+        if re.search(pattern, req.raw):
+            if flow.session_id:
+                logger.debug(f"[🔍] Regex match found in session {flow.session_id}")
+                ALL_SESSIONS[flow.session_id] = True
+            return replace_flag(resp)
 
 
 ########### UTILITY FUNCTIONS ###########
 
 
-def block_response(resp):
-    return ...
+def block_response():
     # return INFINITE_LOADING_RESPONSE
     # return ERROR_RESPONSE
+    return ...
 
 
 def replace_flag(resp):
     if BLOCK_ALL_EVIL:
-        return block_response(resp)
+        return block_response()
 
     resp.body = re.sub(FLAG_REGEX, FLAG_REPLACEMENT.encode(), resp.body or b"")
     return resp
@@ -193,12 +197,14 @@ def find_session_id(flow: HttpFlow, req: HttpReq, resp: HttpResp):
 
 
 def myfilter(flow, req, resp):
+    print(flow.start_time.timestamp(), flow.request_time, flow.response_time)
+
     resp.headers["ciao"] = "1"
     return resp
 
 
 FILTERS = [
-    # myfilter,
+    myfilter,
     regex_filter,
     # method_filter,
     # params_filter,
@@ -215,15 +221,12 @@ FILTERS = [
 
 # Gets executed on every request / response pair
 def http_filter(flow: HttpFlow, req: HttpReq, resp: HttpResp):
-    if TRACK_HTTP_SESSION:
-        flow.session_id = find_session_id(flow, req, resp)
+    flow.session_id = TRACK_HTTP_SESSION and find_session_id(flow, req, resp)
 
     for f in FILTERS:
         result = f(flow, req, resp)
-        if result is ...:
-            return result
         if result:
-            resp = result
+            return result
     return resp
 
 

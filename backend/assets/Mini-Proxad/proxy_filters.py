@@ -29,48 +29,19 @@ FilterType = typing.Callable[[RawFlow, bytes], FilterOutput]
 
 # ------------------------------------------------------------------------------------------------ #
 
-
-# HTTP session tracking
-# HTTP_SESSION_TRACK = False
-# HTTP_SESSION_COOKIE = b"session"
-# HTTP_SESSION_TTL = 30  # seconds
-# HTTP_SESSION_LIMIT = 4000
-#
-# HTTP_SESSION_GET_REGEX = re.compile(
-#    rb"Cookie:\s*" + HTTP_SESSION_COOKIE + rb"=([^;\r\n]+)"
-# )
-# HTTP_SESSION_SET_REGEX = re.compile(
-#    rb"Set-Cookie:\s*" + HTTP_SESSION_COOKIE + rb"=([^;]+)"
-# )
-
 # Regexes
 FLAG_REGEX = re.compile(rb"[A-Z0-9]{31}=")
 FLAG_REPLACEMENT = b"GRAZIEDARIO"
 
 
 # Used to detect evil connections (check_is_evil)
-ALL_REGEXES = [rb"evil"]
-
-
-# Blacklist and whitelist of user-agents (regexes!)
-USERAGENTS_WHITELIST = [r"CHECKER"]
-USERAGENTS_BLACKLIST = [r"requests"]
+ALL_REGEXES = [rb"evilbanana"]
 
 
 # ------------------------------------------------------------------------------------------------ #
 
 
 COMPILED_REGEXES = [re.compile(pattern) for pattern in ALL_REGEXES]
-
-COMPILED_WHITELIST = [
-    re.compile(rf"(?i:User-Agent):\s*{pattern}\r\n".encode())
-    for pattern in USERAGENTS_WHITELIST
-]
-
-COMPILED_BLACKLIST = [
-    re.compile(rf"(?i:User-Agent):\s*{pattern}\r\n".encode())
-    for pattern in USERAGENTS_BLACKLIST
-]
 
 
 # This filter always replaces the flag, combine it
@@ -99,18 +70,6 @@ def check_is_evil(flow, chunk):
 # If the connection is recognized as evil, call DEFAULT_FILTER
 def default_on_evil(flow, chunk):
     if check_is_evil(flow, chunk):
-        return DEFAULT_FILTER(flow, chunk)
-
-
-def whitelist_useragent(flow, chunk):
-    if not any(re.search(ua, chunk) for ua in COMPILED_WHITELIST):
-        print("Blocked or missing User-Agent")
-        return DEFAULT_FILTER(flow, chunk)
-
-
-def blacklist_useragent(flow, chunk):
-    if any(re.search(ua, chunk) for ua in COMPILED_BLACKLIST):
-        print("Blacklisted User-Agent")
         return DEFAULT_FILTER(flow, chunk)
 
 
@@ -177,6 +136,7 @@ def client_raw_filter(flow: RawFlow, chunk: bytes) -> FilterOutput:
     #    if match:
     #        print("Found session_id:", match.group(1))
 
+    print("ELAPSED", (flow.last_time - flow.start_time).total_seconds())
     return run_filters(flow, chunk, CLIENT_FILTERS)
 
 
