@@ -104,6 +104,8 @@ def initialize_service_repo(ssh, config, svc):
             "*.yml.bak",
             "*_pcaps/",
             "mitmkeys.log",
+            "exploit/",
+            "proxy_folder*/"
         ]
         volumes_to_ignore.extend(default_ignores)
 
