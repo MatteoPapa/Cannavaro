@@ -64,13 +64,13 @@ class FlowContext:
         self.session_id = None
 
         if self.type == "http":
-            request_line = f"{flow.request.method} {flow.request.path} {flow.request.http_version}\r\n".encode()
-            headers = b"".join(f"{k}: {v}\r\n".encode() for k, v in flow.request.headers.items())
+            request_line = f"{flow.request.method} {flow.request.path} {flow.request.http_version}\r\n".encode(errors="ignore")
+            headers = b"".join(f"{k}: {v}\r\n".encode(errors="ignore") for k, v in flow.request.headers.items())
             body = flow.request.raw_content or b""
             self.raw_request = request_line + headers + b"\r\n" + body
 
-            status_line = f"{flow.response.http_version} {flow.response.status_code} {flow.response.reason}\r\n".encode()
-            headers = b"".join(f"{k}: {v}\r\n".encode() for k, v in flow.response.headers.items())
+            status_line = f"{flow.response.http_version} {flow.response.status_code} {flow.response.reason}\r\n".encode(errors="ignore")
+            headers = b"".join(f"{k}: {v}\r\n".encode(errors="ignore") for k, v in flow.response.headers.items())
             body = flow.response.raw_content or b""
             self.raw_response = status_line + headers + b"\r\n" + body
 

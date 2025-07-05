@@ -48,7 +48,7 @@ dump_max_packets: 256
 # Requests (or responses!) with a body greater then the max body size
 # will automatically kill the flow
 http_enabled: {{HTTP_ENABLED}}
-http_keep_alive: false
+http_keep_alive: true
 http_half_close: true
 http_date_header: false
 http_max_body: 20MB
